@@ -45,33 +45,41 @@ export class ElectronShellAIAgent implements AIAgent {
     const result = await this.query(prompt);
     console.log('ElectronShellAIAgent query result:', result);
     
-    // Format output like !shell commands for proper UI display
+    // Format output for markdown rendering (with code blocks)
     let output = '';
     if (result.success) {
-      output = result.metadata?.stdout || result.content || 'Command completed successfully';
+      const stdout = result.metadata?.stdout || result.content || 'Command completed successfully';
+      output = `\`\`\`\n${stdout}\n\`\`\``;
+      
       // Include stderr if present
       if (result.metadata?.stderr && result.metadata.stderr.trim()) {
-        output += `\n[stderr]: ${result.metadata.stderr.trim()}`;
+        output += `\n\n**stderr:**\n\`\`\`\n${result.metadata.stderr.trim()}\n\`\`\``;
       }
     } else {
-      // For failures, show comprehensive error info
-      const parts = [];
+      // For failures, show comprehensive error info in markdown format
+      output = '**Command failed**\n\n';
+      
       if (result.metadata?.stderr && result.metadata.stderr.trim()) {
-        parts.push(`[stderr]: ${result.metadata.stderr.trim()}`);
+        output += `**stderr:**\n\`\`\`\n${result.metadata.stderr.trim()}\n\`\`\`\n\n`;
       }
+      
       if (result.metadata?.stdout && result.metadata.stdout.trim()) {
-        parts.push(`[stdout]: ${result.metadata.stdout.trim()}`);
+        output += `**stdout:**\n\`\`\`\n${result.metadata.stdout.trim()}\n\`\`\`\n\n`;
       }
+      
       if (result.metadata?.exitCode !== undefined) {
-        parts.push(`[exit code: ${result.metadata.exitCode}]`);
+        output += `**Exit code:** ${result.metadata.exitCode}`;
       }
-      output = parts.length > 0 ? parts.join('\n') : (result.content || 'Command failed');
+      
+      if (!result.metadata?.stderr && !result.metadata?.stdout) {
+        output += result.content || 'Unknown error occurred';
+      }
     }
     
-    console.log('🔥 Formatted shell agent output:', output);
+    console.log('🔥 Formatted shell agent markdown output:', output);
     
-    // Return special marker for terminal output (like !shell commands)
-    return `__TERMINAL_OUTPUT__${JSON.stringify({ command: `shell-agent: ${prompt}`, output })}`;
+    // Return plain markdown content (not terminal output)
+    return output;
   }
   
   /**
