@@ -30,14 +30,49 @@ const createWindow = () => {
   const isDev = process.env.NODE_ENV === 'development';
   
   if (isDev) {
-    mainWindow.loadURL('http://localhost:3000');
+    mainWindow.loadURL('http://localhost:3002');
     mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    // Open DevTools in production for debugging
+    mainWindow.webContents.openDevTools();
   }
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    
+    // Test renderer process AIProvider after a delay
+    setTimeout(() => {
+      console.log('🧪 Testing renderer AIProvider from main process...');
+      mainWindow.webContents.executeJavaScript(`
+        try {
+          console.log('=== RENDERER SCRIPT EXECUTION START ===');
+          console.log('Window object keys:', Object.keys(window).filter(k => k.includes('test')));
+          console.log('testAIProvider type:', typeof window.testAIProvider);
+          
+          if (typeof window.testAIProvider === 'function') {
+            console.log('=== CALLING GLOBAL TEST FUNCTION ===');
+            return window.testAIProvider().catch(err => {
+              console.error('testAIProvider function error:', err);
+              return 'Function execution error: ' + err.message;
+            });
+          } else {
+            console.error('Global testAIProvider function not available');
+            return 'Error: Global function not found';
+          }
+        } catch (error) {
+          console.error('=== RENDERER SCRIPT ERROR ===', error);
+          return 'Script error: ' + error.message + ' | Stack: ' + error.stack;
+        }
+      `).then(result => {
+        console.log('📊 Renderer test completed:', result);
+      }).catch(error => {
+        console.error('❌ Renderer test failed:');
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+        console.error('Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+      });
+    }, 3000);
   });
 };
 
@@ -355,4 +390,245 @@ ipcMain.handle('show-save-dialog', async () => {
     ]
   });
   return result;
+});
+
+// Configuration operations
+ipcMain.handle('get-config', async () => {
+  try {
+    const configPath = path.join(__dirname, '../dtui.json');
+    const configContent = await fs.readFile(configPath, 'utf-8');
+    const config = JSON.parse(configContent);
+    console.log('Loaded Electron config:', config);
+    return config;
+  } catch (error) {
+    console.error('Failed to load config:', error);
+    // Return default configuration
+    return {
+      ai: {
+        provider: 'shell',
+        shell: {
+          command: 'echo',
+          args: ['[Electron Shell Response]:'],
+          template: '{command} {args} "{prompt}"',
+          timeout: 10000,
+          streaming: false
+        }
+      },
+      terminal: {
+        shell: '/bin/bash',
+        columns: 80,
+        lines: 24
+      },
+      ui: {
+        theme: 'dark',
+        fontSize: 14
+      }
+    };
+  }
+});
+
+ipcMain.handle('set-config', async (_, config) => {
+  try {
+    const configPath = path.join(__dirname, '../dtui.json');
+    await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
+    
+    // Notify renderer process of config change
+    if (mainWindow) {
+      mainWindow.webContents.send('config-changed', config);
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to save config:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Test shell agent functionality
+ipcMain.handle('test-shell-agent', async () => {
+  try {
+    console.log('🧪 Testing shell agent from main process...');
+    
+    // Load config
+    const configPath = path.join(__dirname, '../dtui.json');
+    const configContent = await fs.readFile(configPath, 'utf-8');
+    const config = JSON.parse(configContent);
+    
+    console.log('Shell config:', config.ai.shell);
+    
+    // Build command
+    const template = config.ai.shell.template;
+    const command = config.ai.shell.command;
+    const args = config.ai.shell.args;
+    const testPrompt = "Hello from Electron main process";
+    
+    const fullCommand = template
+      .replace('{command}', command)
+      .replace('{args}', args.join(' '))
+      .replace('{prompt}', testPrompt);
+    
+    console.log('Executing:', fullCommand);
+    
+    // Execute command
+    const { spawn } = require('child_process');
+    const [cmd, ...cmdArgs] = fullCommand.split(' ').map(arg => {
+      if (arg.startsWith('"') && arg.endsWith('"')) {
+        return arg.slice(1, -1);
+      }
+      return arg;
+    });
+    
+    return new Promise((resolve) => {
+      const testProcess = spawn(cmd, cmdArgs, { shell: true });
+      let output = '';
+      let error = '';
+      
+      testProcess.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+      
+      testProcess.stderr.on('data', (data) => {
+        error += data.toString();
+      });
+      
+      testProcess.on('close', (code) => {
+        console.log('✅ Shell agent test result:', output.trim());
+        if (error.trim()) {
+          console.log('❌ Shell agent stderr:', error.trim());
+        }
+        console.log('Exit code:', code);
+        
+        resolve({
+          success: code === 0,
+          command: fullCommand,
+          output: output.trim(),
+          error: error.trim(),
+          exitCode: code
+        });
+      });
+      
+      testProcess.on('error', (err) => {
+        console.log('❌ Shell agent process error:', err.message);
+        resolve({
+          success: false,
+          command: fullCommand,
+          output: '',
+          error: err.message,
+          exitCode: -1
+        });
+      });
+    });
+  } catch (error) {
+    console.error('❌ Shell agent test failed:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// Execute shell AI command (for renderer process)
+ipcMain.handle('execute-shell-ai-command', async (_, prompt) => {
+  try {
+    console.log('🧪 Executing shell AI command for prompt:', prompt);
+    
+    // Load config
+    const configPath = path.join(__dirname, '../dtui.json');
+    const configContent = await fs.readFile(configPath, 'utf-8');
+    const config = JSON.parse(configContent);
+    
+    const shellConfig = config.ai.shell;
+    console.log('Using shell config:', shellConfig);
+    
+    // Build command using template
+    const command = shellConfig.command;
+    const args = shellConfig.args || [];
+    const template = shellConfig.template || '{command} {args} "{prompt}"';
+    
+    const fullCommand = template
+      .replace('{command}', command)
+      .replace('{args}', args.join(' '))
+      .replace('{prompt}', prompt.replace(/"/g, '\\"').replace(/\$/g, '\\$'));
+    
+    console.log('Full command:', fullCommand);
+    
+    // Execute command
+    return new Promise((resolve) => {
+      const testProcess = spawn(fullCommand, [], { shell: true });
+      let output = '';
+      let error = '';
+      
+      testProcess.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+      
+      testProcess.stderr.on('data', (data) => {
+        error += data.toString();
+      });
+      
+      testProcess.on('close', (code) => {
+        console.log('Command output:', output.trim());
+        console.log('Command stderr:', error.trim());
+        console.log('Command exit code:', code);
+        
+        if (code === 0) {
+          let finalContent = output.trim() || 'Command completed successfully';
+          
+          // Include stderr in success response if present
+          if (error.trim()) {
+            finalContent += `\n[stderr]: ${error.trim()}`;
+          }
+          
+          resolve({
+            success: true,
+            content: finalContent,
+            exitCode: code,
+            stderr: error.trim()
+          });
+        } else {
+          // For failures, combine stdout and stderr for comprehensive error info
+          let errorContent = '';
+          
+          if (error.trim()) {
+            errorContent = error.trim();
+          }
+          
+          if (output.trim()) {
+            errorContent += errorContent ? `\n[stdout]: ${output.trim()}` : output.trim();
+          }
+          
+          if (!errorContent) {
+            errorContent = `Command failed with exit code ${code}`;
+          } else {
+            errorContent += `\n[exit code: ${code}]`;
+          }
+          
+          resolve({
+            success: false,
+            content: errorContent,
+            exitCode: code,
+            stderr: error.trim(),
+            stdout: output.trim()
+          });
+        }
+      });
+      
+      testProcess.on('error', (err) => {
+        console.log('❌ Command execution error:', err.message);
+        resolve({
+          success: false,
+          content: `Failed to execute command: ${err.message}`,
+          exitCode: -1,
+          error: err.message
+        });
+      });
+    });
+  } catch (error) {
+    console.error('❌ Shell AI command failed:', error);
+    return {
+      success: false,
+      content: `Error: ${error.message}`,
+      error: error.message
+    };
+  }
 });

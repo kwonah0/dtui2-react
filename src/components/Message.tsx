@@ -63,7 +63,7 @@ const MessageContent = styled.div`
     margin: 16px 0 8px 0;
     color: var(--text-primary);
     
-    &:first-child {
+    &:first-of-type {
       margin-top: 0;
     }
   }
@@ -71,7 +71,7 @@ const MessageContent = styled.div`
   p {
     margin: 8px 0;
     
-    &:first-child {
+    &:first-of-type {
       margin-top: 0;
     }
     

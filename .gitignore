@@ -91,3 +91,8 @@ Thumbs.db
 
 # Electron build output
 out/
+
+# Local configuration files
+dtui.local.json
+.dtui.json
+*.local.json

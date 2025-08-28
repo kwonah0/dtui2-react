@@ -24,4 +24,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Dialog operations
   showOpenDialog: () => ipcRenderer.invoke('show-open-dialog'),
   showSaveDialog: () => ipcRenderer.invoke('show-save-dialog'),
+  
+  // Configuration operations
+  getConfig: () => ipcRenderer.invoke('get-config'),
+  setConfig: (config) => ipcRenderer.invoke('set-config', config),
+  watchConfig: (callback) => {
+    ipcRenderer.on('config-changed', callback);
+  },
+  unwatchConfig: () => {
+    ipcRenderer.removeAllListeners('config-changed');
+  },
+  
+  // Test shell agent
+  testShellAgent: () => ipcRenderer.invoke('test-shell-agent'),
+  
+  // Execute shell command for AI responses
+  executeShellAICommand: (prompt) => ipcRenderer.invoke('execute-shell-ai-command', prompt),
 });

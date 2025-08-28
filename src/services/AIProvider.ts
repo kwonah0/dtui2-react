@@ -1,8 +1,12 @@
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import { Message, MessageRole } from '../types';
-import { createAIAgent, AIAgent } from './MockAIAgent';
+import { UniversalAgentFactory } from '../agents/UniversalAgentFactory';
+import { universalConfigService } from '../config/UniversalConfigService';
+import { APIAIConfig } from '../config/types';
+import { AIAgent } from './MockAIAgent';
 
+// Legacy interface for backward compatibility
 export interface AIConfig {
   provider: 'openai' | 'anthropic';
   model: string;
@@ -14,11 +18,15 @@ export interface AIConfig {
 export class AIProvider {
   private openai: OpenAI | null = null;
   private anthropic: Anthropic | null = null;
-  private config: AIConfig;
-  private aiAgent: AIAgent;
+  private legacyConfig: AIConfig;
+  private aiAgent: AIAgent | null = null;
 
   constructor(config?: Partial<AIConfig>) {
-    // Default configuration - handle browser environment
+    console.log('AIProvider constructor called');
+    // Initialize UniversalAgentFactory
+    this.initializeAgent();
+    
+    // Legacy config for backward compatibility (API providers)
     const getEnvVar = (key: string): string => {
       if (typeof process !== 'undefined' && process.env) {
         return process.env[key] || '';
@@ -26,7 +34,7 @@ export class AIProvider {
       return '';
     };
 
-    this.config = {
+    this.legacyConfig = {
       provider: 'openai',
       model: 'gpt-3.5-turbo',
       apiKey: getEnvVar('REACT_APP_OPENAI_API_KEY'),
@@ -35,53 +43,99 @@ export class AIProvider {
       ...config,
     };
 
-    // Initialize AI Agent
-    this.aiAgent = createAIAgent('mock');
-
-    // Initialize the appropriate client
-    if (this.config.provider === 'openai' && this.config.apiKey) {
+    // Initialize API clients if needed for legacy API mode
+    if (this.legacyConfig.provider === 'openai' && this.legacyConfig.apiKey) {
       this.openai = new OpenAI({
-        apiKey: this.config.apiKey,
-        dangerouslyAllowBrowser: true, // Required for browser usage
+        apiKey: this.legacyConfig.apiKey,
+        dangerouslyAllowBrowser: true,
       });
-    } else if (this.config.provider === 'anthropic') {
-      const anthropicKey = getEnvVar('REACT_APP_ANTHROPIC_API_KEY') || config?.apiKey || '';
-      if (anthropicKey) {
-        this.anthropic = new Anthropic({
-          apiKey: anthropicKey,
-          dangerouslyAllowBrowser: true,
-        });
-        this.config.model = this.config.model || 'claude-3-haiku-20240307';
-      }
+    } else if (this.legacyConfig.provider === 'anthropic' && this.legacyConfig.apiKey) {
+      this.anthropic = new Anthropic({
+        apiKey: this.legacyConfig.apiKey,
+        dangerouslyAllowBrowser: true,
+      });
+    }
+  }
+
+  private async initializeAgent(): Promise<void> {
+    console.log('AIProvider.initializeAgent() called');
+    try {
+      // Initialize UniversalAgentFactory and get the appropriate agent
+      console.log('Initializing UniversalAgentFactory...');
+      await UniversalAgentFactory.initialize();
+      console.log('Getting agent from UniversalAgentFactory...');
+      this.aiAgent = await UniversalAgentFactory.getAgent();
+      
+      // Set up config watcher
+      UniversalAgentFactory.watchConfig();
+      
+      console.log('AIProvider initialized with agent:', this.aiAgent?.name);
+      console.log('Environment info:', UniversalAgentFactory.getEnvironmentInfo());
+    } catch (error) {
+      console.error('Failed to initialize agent:', error);
+      // Fallback to MockAIAgent
+      const { MockAIAgent } = await import('./MockAIAgent');
+      this.aiAgent = new MockAIAgent();
     }
   }
 
   async generateResponse(messages: Message[]): Promise<string> {
+    console.log('🚀 AIProvider.generateResponse called with messages:', messages);
+    
+    // Ensure agent is initialized
+    if (!this.aiAgent) {
+      console.log('Agent not initialized, initializing now...');
+      await this.initializeAgent();
+    }
+    
+    console.log('Current agent:', this.aiAgent?.name);
+    
     // Check for special commands first
     const lastMessage = messages[messages.length - 1];
     if (lastMessage.role === MessageRole.USER) {
       const specialResponse = await this.handleSpecialCommands(lastMessage.content);
       if (specialResponse) {
+        console.log('Special command response:', specialResponse);
         return specialResponse;
       }
     }
 
-    // If no API key is configured, use Mock AI Agent for general responses
-    if (!this.config.apiKey) {
-      return this.generateMockResponse(messages);
+    // Check if we're using the new agent-based system
+    const aiProvider = universalConfigService.getAIProvider();
+    console.log('AI Provider type:', aiProvider);
+    
+    if (aiProvider === 'shell' || aiProvider === 'mock') {
+      if (this.aiAgent) {
+        console.log('Calling agent.generateResponse...');
+        try {
+          const response = await this.aiAgent.generateResponse(messages);
+          console.log('Agent response:', response);
+          return response;
+        } catch (error) {
+          console.error('Agent generateResponse error:', error);
+          return `Agent Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        }
+      } else {
+        console.error('Agent is null despite initialization!');
+        return 'Error: AI agent not available';
+      }
     }
 
-    if (this.config.provider === 'openai' && this.openai) {
-      return this.generateOpenAIResponse(messages);
-    } else if (this.config.provider === 'anthropic' && this.anthropic) {
-      return this.generateAnthropicResponse(messages);
-    } else {
-      // Fallback to mock response if real AI providers fail
-      return this.generateMockResponse(messages);
+    // Legacy API-based providers
+    const apiConfig = universalConfigService.get<APIAIConfig>('ai:api');
+    if (apiConfig && apiConfig.apiKey) {
+      if (apiConfig.provider === 'openai' && this.openai) {
+        return this.generateOpenAIResponse(messages, apiConfig);
+      } else if (apiConfig.provider === 'anthropic' && this.anthropic) {
+        return this.generateAnthropicResponse(messages, apiConfig);
+      }
     }
+
+    // Fallback to current agent
+    return this.aiAgent!.generateResponse(messages);
   }
 
-  private async generateOpenAIResponse(messages: Message[]): Promise<string> {
+  private async generateOpenAIResponse(messages: Message[], config: APIAIConfig): Promise<string> {
     if (!this.openai) {
       throw new Error('OpenAI client not initialized');
     }
@@ -92,16 +146,16 @@ export class AIProvider {
     }));
 
     const completion = await this.openai.chat.completions.create({
-      model: this.config.model,
+      model: config.model || 'gpt-3.5-turbo',
       messages: openAIMessages,
-      temperature: this.config.temperature,
-      max_tokens: this.config.maxTokens,
+      temperature: config.temperature || 0.7,
+      max_tokens: config.maxTokens || 4000,
     });
 
     return completion.choices[0]?.message?.content || 'No response received';
   }
 
-  private async generateAnthropicResponse(messages: Message[]): Promise<string> {
+  private async generateAnthropicResponse(messages: Message[], config: APIAIConfig): Promise<string> {
     if (!this.anthropic) {
       throw new Error('Anthropic client not initialized');
     }
@@ -119,9 +173,9 @@ export class AIProvider {
       'You are Claude, a helpful AI assistant created by Anthropic.';
 
     const response = await this.anthropic.messages.create({
-      model: this.config.model,
-      max_tokens: this.config.maxTokens || 4000,
-      temperature: this.config.temperature,
+      model: config.model || 'claude-3-haiku-20240307',
+      max_tokens: config.maxTokens || 4000,
+      temperature: config.temperature || 0.7,
       system: systemMessage,
       messages: anthropicMessages,
     });
@@ -140,19 +194,45 @@ export class AIProvider {
       const command = message.slice(1).trim();
       if (window.electronAPI) {
         try {
+          console.log('🔥 Executing shell command:', command);
           // Execute command and get output for chat integration
           const result = await window.electronAPI.executeCommandWithOutput(command);
-          const output = result.success ? result.stdout : (result.stderr || 'Command failed');
+          console.log('🔥 Shell command result:', result);
+          
+          let output = '';
+          if (result.success) {
+            output = result.stdout || 'Command completed successfully';
+            // Include stderr if present (some commands output info to stderr even on success)
+            if (result.stderr && result.stderr.trim()) {
+              output += `\n[stderr]: ${result.stderr.trim()}`;
+            }
+          } else {
+            // For failures, show both stdout and stderr
+            const parts = [];
+            if (result.stderr && result.stderr.trim()) {
+              parts.push(`[stderr]: ${result.stderr.trim()}`);
+            }
+            if (result.stdout && result.stdout.trim()) {
+              parts.push(`[stdout]: ${result.stdout.trim()}`);
+            }
+            if (result.exitCode !== undefined) {
+              parts.push(`[exit code: ${result.exitCode}]`);
+            }
+            output = parts.length > 0 ? parts.join('\n') : 'Command failed';
+          }
+          
+          console.log('🔥 Final output to show:', output);
           
           // Return special marker for terminal output
           return `__TERMINAL_OUTPUT__${JSON.stringify({ command, output })}`;
         } catch (error) {
+          console.error('🔥 Shell command error:', error);
           return `**Command:** \`${command}\`\n\n**Error:** ${error instanceof Error ? error.message : 'Unknown error'}`;
         }
       } else {
-        // Browser environment: use Mock AI Agent for shell simulation
+        // Browser environment: use current AI Agent for shell simulation
         try {
-          const result = await this.aiAgent.executeCommand(command);
+          const result = await this.aiAgent!.executeCommand(command);
           return result.content;
         } catch (error) {
           return `**Command:** \`${command}\`\n\n**Error:** ${error instanceof Error ? error.message : 'Unknown error'}`;
@@ -177,7 +257,7 @@ export class AIProvider {
       } else {
         // Browser environment: use Mock API
         try {
-          const result = await this.aiAgent.executeCommand(`cd ${dirPath}`);
+          const result = await this.aiAgent!.executeCommand(`cd ${dirPath}`);
           return result.content;
         } catch (error) {
           return `**Error:** ${error instanceof Error ? error.message : 'Unknown error'}`;
@@ -201,7 +281,7 @@ export class AIProvider {
       } else {
         // Browser environment: use Mock API
         try {
-          const result = await this.aiAgent.executeCommand('pwd');
+          const result = await this.aiAgent!.executeCommand('pwd');
           return result.content;
         } catch (error) {
           return `**Error:** ${error instanceof Error ? error.message : 'Unknown error'}`;
@@ -226,7 +306,7 @@ export class AIProvider {
       } else {
         // Browser environment: use Mock AI Agent
         try {
-          const result = await this.aiAgent.analyzeCode(filePath);
+          const result = await this.aiAgent!.analyzeCode(filePath);
           return result.content;
         } catch (error) {
           return `**File:** \`${filePath}\`\n\n**Error:** ${error instanceof Error ? error.message : 'Unknown error'}`;
@@ -257,7 +337,7 @@ export class AIProvider {
       } else {
         // Browser environment: use Mock AI Agent
         try {
-          const result = await this.aiAgent.analyzeProject(dirPath);
+          const result = await this.aiAgent!.analyzeProject(dirPath);
           return result.content;
         } catch (error) {
           return `**Directory:** \`${dirPath}\`\n\n**Error:** ${error instanceof Error ? error.message : 'Unknown error'}`;
@@ -269,7 +349,7 @@ export class AIProvider {
     if (message.toLowerCase().startsWith('analyze code ')) {
       const filePath = message.slice('analyze code '.length).trim();
       try {
-        const result = await this.aiAgent.analyzeCode(filePath);
+        const result = await this.aiAgent!.analyzeCode(filePath);
         return result.content;
       } catch (error) {
         return `**Error analyzing code:** ${error instanceof Error ? error.message : 'Unknown error'}`;
@@ -279,7 +359,7 @@ export class AIProvider {
     if (message.toLowerCase().startsWith('analyze project') || message.toLowerCase().startsWith('analyze project ')) {
       const projectPath = message.slice('analyze project'.length).trim() || '.';
       try {
-        const result = await this.aiAgent.analyzeProject(projectPath);
+        const result = await this.aiAgent!.analyzeProject(projectPath);
         return result.content;
       } catch (error) {
         return `**Error analyzing project:** ${error instanceof Error ? error.message : 'Unknown error'}`;
@@ -289,7 +369,7 @@ export class AIProvider {
     if (message.toLowerCase().startsWith('suggest fix ')) {
       const errorDescription = message.slice('suggest fix '.length).trim();
       try {
-        const result = await this.aiAgent.suggestFix(errorDescription);
+        const result = await this.aiAgent!.suggestFix(errorDescription);
         return result.content;
       } catch (error) {
         return `**Error generating suggestions:** ${error instanceof Error ? error.message : 'Unknown error'}`;
@@ -299,7 +379,7 @@ export class AIProvider {
     if (message.toLowerCase().startsWith('generate code ')) {
       const prompt = message.slice('generate code '.length).trim();
       try {
-        const result = await this.aiAgent.generateCode(prompt);
+        const result = await this.aiAgent!.generateCode(prompt);
         return result.content;
       } catch (error) {
         return `**Error generating code:** ${error instanceof Error ? error.message : 'Unknown error'}`;
@@ -307,96 +387,35 @@ export class AIProvider {
     }
 
     if (message.toLowerCase().startsWith('help') || message.toLowerCase() === 'commands') {
-      return this.getHelpMessage();
+      if (this.aiAgent) {
+        const result = await this.aiAgent.generateResponse([{ role: MessageRole.USER, content: 'help' }]);
+        return result;
+      }
+      return '**Help:** Commands available - type commands like "analyze code", "generate code", or prefix shell commands with "!"';
     }
 
     return null; // Not a special command
   }
 
   setConfig(config: Partial<AIConfig>) {
-    this.config = { ...this.config, ...config };
+    this.legacyConfig = { ...this.legacyConfig, ...config };
     
     // Reinitialize clients if needed
-    if (config.provider === 'openai' || (config.apiKey && this.config.provider === 'openai')) {
+    if (config.provider === 'openai' && config.apiKey) {
       this.openai = new OpenAI({
-        apiKey: this.config.apiKey,
+        apiKey: config.apiKey,
         dangerouslyAllowBrowser: true,
       });
-    } else if (config.provider === 'anthropic' || (config.apiKey && this.config.provider === 'anthropic')) {
+    } else if (config.provider === 'anthropic' && config.apiKey) {
       this.anthropic = new Anthropic({
-        apiKey: this.config.apiKey,
+        apiKey: config.apiKey,
         dangerouslyAllowBrowser: true,
       });
     }
   }
 
   getConfig(): AIConfig {
-    return { ...this.config };
+    return { ...this.legacyConfig };
   }
 
-  private async generateMockResponse(messages: Message[]): Promise<string> {
-    // Simple mock AI responses for general chat
-    const lastMessage = messages[messages.length - 1];
-    const userMessage = lastMessage.content.toLowerCase();
-    
-    // Greeting responses
-    if (userMessage.includes('hello') || userMessage.includes('hi')) {
-      return "Hello! I'm a Mock AI Assistant. I can help you with:\n\n- Shell commands (prefix with `!`)\n- File operations (`read file <path>`)\n- Code analysis (`analyze code <file>`)\n- Project analysis (`analyze project`)\n- Error suggestions (`suggest fix <error>`)\n- Code generation (`generate code <prompt>`)\n\nWhat would you like to do?";
-    }
-    
-    // Programming related
-    if (userMessage.includes('code') || userMessage.includes('programming') || userMessage.includes('javascript') || userMessage.includes('react')) {
-      return "I can help you with coding! Here are some things I can do:\n\n1. **Analyze your code**: Use `analyze code src/App.tsx`\n2. **Generate code**: Use `generate code React component for user profile`\n3. **Debug errors**: Use `suggest fix TypeError: Cannot read property`\n4. **Explore project**: Use `analyze project`\n\nTry one of these commands!";
-    }
-    
-    // Help requests
-    if (userMessage.includes('help') || userMessage.includes('what can you do')) {
-      return this.getHelpMessage();
-    }
-    
-    // File/terminal related
-    if (userMessage.includes('file') || userMessage.includes('terminal') || userMessage.includes('command')) {
-      return "I can help with file and terminal operations!\n\n**File Operations:**\n- `read file package.json` - Read any file\n- `list files` or `ls .` - List directory contents\n\n**Terminal Commands:**\n- `!ls -la` - List files with details\n- `!pwd` - Show current directory\n- `!git status` - Check git status\n- `!npm run build` - Run npm commands\n\nTry any command starting with `!`";
-    }
-    
-    // Default response
-    const responses = [
-      "I'm a Mock AI Assistant running in your browser! I can analyze code, execute shell commands, and help with development tasks. Try typing `!ls` or `help` to see what I can do.",
-      "Hello! I'm here to help with your development workflow. I can run terminal commands, analyze code, and provide coding assistance. What would you like to work on?",
-      "I'm your AI coding assistant! I can help with file operations, shell commands, code analysis, and more. Try some commands like:\n\n- `!git status`\n- `analyze project`\n- `read file package.json`",
-      "Welcome to DTUI2! I'm a Mock AI that can simulate Claude Code functionality. I can help you with terminal operations, file management, and code development tasks."
-    ];
-    
-    return responses[Math.floor(Math.random() * responses.length)];
-  }
-
-  private getHelpMessage(): string {
-    return `# Available Commands
-
-## Terminal Operations
-- \`!<command>\` - Execute shell command (e.g., \`!ls\`, \`!npm install\`)
-- \`cd <directory>\` - Change current directory
-- \`pwd\` - Show current working directory
-
-## File Operations
-- \`read file <path>\` - Read and display file contents
-- \`list files\` or \`ls <path>\` - List directory contents
-
-## AI Agent Commands
-- \`analyze code <file-path>\` - Analyze code file with AI insights
-- \`analyze project [path]\` - Analyze project structure (defaults to current directory)
-- \`suggest fix <error-description>\` - Get suggestions for fixing errors
-- \`generate code <prompt>\` - Generate code based on prompt
-
-## General
-- \`help\` or \`commands\` - Show this help message
-
-**Examples:**
-- \`!npm run build\` - Run npm build command
-- \`analyze code src/App.tsx\` - Analyze React component
-- \`suggest fix TypeError: Cannot read property 'map' of undefined\`
-- \`generate code React component for user profile\`
-
-*Note: Terminal and file operations require the desktop app.*`;
-  }
 }

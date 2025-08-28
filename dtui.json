@@ -1,0 +1,21 @@
+{
+  "ai": {
+    "provider": "shell",
+    "shell": {
+      "command": "echo",
+      "args": ["\"[SHELL RESPONSE]:\""],
+      "template": "{command} {args} \"{prompt}\"",
+      "timeout": 5000,
+      "streaming": false
+    }
+  },
+  "terminal": {
+    "shell": "/bin/bash",
+    "columns": 80,
+    "lines": 24
+  },
+  "ui": {
+    "theme": "dark",
+    "fontSize": 14
+  }
+}

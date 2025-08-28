@@ -1,0 +1,64 @@
+{
+  "ai": {
+    "provider": "shell",
+    "shell": {
+      "comment": "Examples for different AI CLI tools",
+      
+      "_example_llm": {
+        "command": "llm",
+        "args": ["-m", "gpt-4"],
+        "template": "{command} {args} \"{prompt}\""
+      },
+      
+      "_example_ollama": {
+        "command": "ollama",
+        "args": ["run", "llama2"],
+        "template": "{command} {args} \"{prompt}\""
+      },
+      
+      "_example_claude": {
+        "command": "claude",
+        "args": ["--model", "claude-3-opus"],
+        "template": "{command} {args} \"{prompt}\""
+      },
+      
+      "_example_custom": {
+        "command": "/usr/local/bin/my-ai-cli",
+        "args": ["--format", "json"],
+        "template": "{command} {args} --query \"{prompt}\"",
+        "env": {
+          "API_KEY": "your-api-key-here"
+        }
+      },
+      
+      "command": "echo",
+      "args": ["AI Response:"],
+      "template": "{command} {args} \"{prompt}\"",
+      "timeout": 30000,
+      "streaming": false,
+      "workingDirectory": "."
+    },
+    "api": {
+      "_comment": "For future API-based AI providers",
+      "provider": "openai",
+      "apiKey": "",
+      "model": "gpt-3.5-turbo",
+      "temperature": 0.7,
+      "maxTokens": 2000
+    }
+  },
+  "terminal": {
+    "shell": "/bin/bash",
+    "columns": 80,
+    "lines": 24,
+    "env": {
+      "TERM": "xterm-256color",
+      "COLORTERM": "truecolor"
+    }
+  },
+  "ui": {
+    "theme": "dark",
+    "fontSize": 14,
+    "fontFamily": "Monaco, Menlo, 'Ubuntu Mono', monospace"
+  }
+}

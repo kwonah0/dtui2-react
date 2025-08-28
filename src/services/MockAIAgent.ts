@@ -7,6 +7,7 @@ export interface AIAgent {
   suggestFix(error: string, context?: string): Promise<AIAgentResult>;
   analyzeProject(projectPath: string): Promise<AIAgentResult>;
   generateCode(prompt: string, language?: string): Promise<AIAgentResult>;
+  generateResponse(messages: any[]): Promise<string>;
 }
 
 export interface AIAgentResult {
@@ -230,6 +231,80 @@ export class MockAIAgent implements AIAgent {
         promptLength: prompt.length
       }
     };
+  }
+
+  async generateResponse(messages: any[]): Promise<string> {
+    // Convert message history to a simple prompt for mock response
+    const lastMessage = messages[messages.length - 1];
+    const prompt = lastMessage?.content || '';
+    
+    // Use existing mock response logic
+    const result = await this.generateMockResponse(prompt);
+    return result;
+  }
+
+  private async generateMockResponse(prompt: string): Promise<string> {
+    const userMessage = prompt.toLowerCase();
+    
+    // Greeting responses
+    if (userMessage.includes('hello') || userMessage.includes('hi')) {
+      return "Hello! I'm a Mock AI Assistant. I can help you with:\n\n- Shell commands (prefix with `!`)\n- File operations (`read file <path>`)\n- Code analysis (`analyze code <file>`)\n- Project analysis (`analyze project`)\n- Error suggestions (`suggest fix <error>`)\n- Code generation (`generate code <prompt>`)\n\nWhat would you like to do?";
+    }
+    
+    // Programming related
+    if (userMessage.includes('code') || userMessage.includes('programming') || userMessage.includes('javascript') || userMessage.includes('react')) {
+      return "I can help you with coding! Here are some things I can do:\n\n1. **Analyze your code**: Use `analyze code src/App.tsx`\n2. **Generate code**: Use `generate code React component for user profile`\n3. **Debug errors**: Use `suggest fix TypeError: Cannot read property`\n4. **Explore project**: Use `analyze project`\n\nTry one of these commands!";
+    }
+    
+    // Help requests
+    if (userMessage.includes('help') || userMessage.includes('what can you do')) {
+      return this.getHelpMessage();
+    }
+    
+    // File/terminal related
+    if (userMessage.includes('file') || userMessage.includes('terminal') || userMessage.includes('command')) {
+      return "I can help with file and terminal operations!\n\n**File Operations:**\n- `read file package.json` - Read any file\n- `list files` or `ls .` - List directory contents\n\n**Terminal Commands:**\n- `!ls -la` - List files with details\n- `!pwd` - Show current directory\n- `!git status` - Check git status\n- `!npm run build` - Run npm commands\n\nTry any command starting with `!`";
+    }
+    
+    // Default response
+    const responses = [
+      "I'm a Mock AI Assistant running in your browser! I can analyze code, execute shell commands, and help with development tasks. Try typing `!ls` or `help` to see what I can do.",
+      "Hello! I'm here to help with your development workflow. I can run terminal commands, analyze code, and provide coding assistance. What would you like to work on?",
+      "I'm your AI coding assistant! I can help with file operations, shell commands, code analysis, and more. Try some commands like:\n\n- `!git status`\n- `analyze project`\n- `read file package.json`",
+      "Welcome to DTUI2! I'm a Mock AI that can simulate Claude Code functionality. I can help you with terminal operations, file management, and code development tasks."
+    ];
+    
+    return responses[Math.floor(Math.random() * responses.length)];
+  }
+
+  private getHelpMessage(): string {
+    return `# Available Commands
+
+## Terminal Operations
+- \`!<command>\` - Execute shell command (e.g., \`!ls\`, \`!npm install\`)
+- \`cd <directory>\` - Change current directory
+- \`pwd\` - Show current working directory
+
+## File Operations
+- \`read file <path>\` - Read and display file contents
+- \`list files\` or \`ls <path>\` - List directory contents
+
+## AI Agent Commands
+- \`analyze code <file-path>\` - Analyze code file with AI insights
+- \`analyze project [path]\` - Analyze project structure (defaults to current directory)
+- \`suggest fix <error-description>\` - Get suggestions for fixing errors
+- \`generate code <prompt>\` - Generate code based on prompt
+
+## General
+- \`help\` or \`commands\` - Show this help message
+
+**Examples:**
+- \`!npm run build\` - Run npm build command
+- \`analyze code src/App.tsx\` - Analyze React component
+- \`suggest fix TypeError: Cannot read property 'map' of undefined\`
+- \`generate code React component for user profile\`
+
+*Note: Terminal and file operations require the desktop app.*`;
   }
 
   private performCodeAnalysis(code: string, filePath: string) {
