@@ -45,7 +45,33 @@ export class ElectronShellAIAgent implements AIAgent {
     const result = await this.query(prompt);
     console.log('ElectronShellAIAgent query result:', result);
     
-    return result.content;
+    // Format output like !shell commands for proper UI display
+    let output = '';
+    if (result.success) {
+      output = result.metadata?.stdout || result.content || 'Command completed successfully';
+      // Include stderr if present
+      if (result.metadata?.stderr && result.metadata.stderr.trim()) {
+        output += `\n[stderr]: ${result.metadata.stderr.trim()}`;
+      }
+    } else {
+      // For failures, show comprehensive error info
+      const parts = [];
+      if (result.metadata?.stderr && result.metadata.stderr.trim()) {
+        parts.push(`[stderr]: ${result.metadata.stderr.trim()}`);
+      }
+      if (result.metadata?.stdout && result.metadata.stdout.trim()) {
+        parts.push(`[stdout]: ${result.metadata.stdout.trim()}`);
+      }
+      if (result.metadata?.exitCode !== undefined) {
+        parts.push(`[exit code: ${result.metadata.exitCode}]`);
+      }
+      output = parts.length > 0 ? parts.join('\n') : (result.content || 'Command failed');
+    }
+    
+    console.log('🔥 Formatted shell agent output:', output);
+    
+    // Return special marker for terminal output (like !shell commands)
+    return `__TERMINAL_OUTPUT__${JSON.stringify({ command: `shell-agent: ${prompt}`, output })}`;
   }
   
   /**

@@ -594,7 +594,8 @@ ipcMain.handle('execute-shell-ai-command', async (_, prompt) => {
             success: true,
             content: finalContent,
             exitCode: code,
-            stderr: error.trim()
+            stderr: error.trim(),
+            stdout: output.trim()
           });
         } else {
           // For failures, combine stdout and stderr for comprehensive error info
