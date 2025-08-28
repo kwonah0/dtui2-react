@@ -300,17 +300,28 @@ ipcMain.handle('execute-command-with-output', async (_, command) => {
         shellSession.stdout.removeListener('data', stdoutListener);
         shellSession.stderr.removeListener('data', stderrListener);
         
-        const cleanOutput = outputBuffer
+        // Extract exit code from output
+        let actualExitCode = 0;
+        let cleanOutput = outputBuffer
           .replace(/\r\n/g, '\n')
           .replace(/\r/g, '\n')
-          .replace(/\x1b\[[0-9;]*[JKH]/g, '') // Remove cursor control sequences
-          .trim();
+          .replace(/\x1b\[[0-9;]*[JKH]/g, ''); // Remove cursor control sequences
+        
+        // Look for exit code marker
+        const exitCodeMatch = cleanOutput.match(/__EXIT_CODE__(\d+)/);
+        if (exitCodeMatch) {
+          actualExitCode = parseInt(exitCodeMatch[1]);
+          // Remove exit code line from output
+          cleanOutput = cleanOutput.replace(/__EXIT_CODE__\d+\n?/, '');
+        }
+        
+        cleanOutput = cleanOutput.trim();
 
         resolve({
-          success: true,
+          success: actualExitCode === 0,
           stdout: cleanOutput,
           stderr: errorBuffer,
-          exitCode: 0
+          exitCode: actualExitCode
         });
       };
 
@@ -318,8 +329,8 @@ ipcMain.handle('execute-command-with-output', async (_, command) => {
       shellSession.stdout.on('data', stdoutListener);
       shellSession.stderr.on('data', stderrListener);
 
-      // Send command with markers
-      const wrappedCommand = `echo "${startMarker}"; ${command}; echo "${endMarker}"`;
+      // Send command with markers and capture exit code
+      const wrappedCommand = `echo "${startMarker}"; ${command}; echo "__EXIT_CODE__$?"; echo "${endMarker}"`;
       shellSession.stdin.write(wrappedCommand + '\n');
 
       // Timeout handling
