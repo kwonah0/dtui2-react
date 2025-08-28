@@ -1,0 +1,36 @@
+# Development Dockerfile for Electron GUI testing
+FROM node:20
+
+# Install GUI dependencies
+RUN apt-get update && apt-get install -y \
+  libgtk-3-0 \
+  libgbm-dev \
+  libnotify-dev \
+  libgconf-2-4 \
+  libnss3 \
+  libxss1 \
+  libasound2 \
+  libxtst6 \
+  xauth \
+  xvfb
+
+# Create app directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy source code
+COPY . .
+
+# Build the app
+RUN npm run build
+
+# Expose port for development server
+EXPOSE 3000
+
+# Default command
+CMD ["npm", "run", "dev"]

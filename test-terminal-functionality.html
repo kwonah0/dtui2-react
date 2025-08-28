@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminal Functionality Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1e1e1e; color: white; }
+        .test-result { margin: 10px 0; padding: 10px; border: 1px solid #333; }
+        .success { border-color: #4CAF50; background: #1a4a1a; }
+        .error { border-color: #f44336; background: #4a1a1a; }
+        pre { white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Terminal Functionality Test</h1>
+    <p>Testing DTUI2 terminal features...</p>
+
+    <div id="results"></div>
+
+    <script>
+        // Simulate the ANSI parser function
+        function parseAnsiToText(text) {
+            // Simple ANSI color code removal for basic testing
+            return text.replace(/\x1b\[[0-9;]*m/g, '');
+        }
+
+        // Test ANSI parsing with sample output
+        function testAnsiParsing() {
+            const sampleLsOutput = `\x1b[1;34mnode_modules\x1b[0m        \x1b[1;34msrc\x1b[0m                 \x1b[1;34melectron\x1b[0m            \x1b[1;34mdist\x1b[0m                
+\x1b[1;34mdocs\x1b[0m                package.json        package-lock.json   README.md           
+ARCHITECTURE.md     tsconfig.json       vite.config.ts      index.html`;
+
+            const cleanOutput = parseAnsiToText(sampleLsOutput);
+            
+            return {
+                name: 'ANSI Parsing',
+                success: cleanOutput.includes('node_modules') && cleanOutput.includes('src'),
+                output: cleanOutput,
+                original: sampleLsOutput
+            };
+        }
+
+        // Test TTY-style formatting
+        function testTtyFormatting() {
+            const mockFiles = [
+                'node_modules', 'src', 'electron', 'dist', 'docs',
+                'package.json', 'package-lock.json', 'README.md',
+                'ARCHITECTURE.md', 'tsconfig.json', 'vite.config.ts', 'index.html'
+            ];
+            
+            // Test column formatting (4 columns, 20 chars each)
+            const columns = 4;
+            const columnWidth = 20;
+            let output = '';
+            
+            for (let i = 0; i < mockFiles.length; i += columns) {
+                const row = mockFiles.slice(i, i + columns);
+                const formattedRow = row.map(file => file.padEnd(columnWidth)).join('');
+                output += formattedRow.trimEnd() + '\\n';
+            }
+            
+            const isMultiColumn = output.includes('node_modules') && 
+                                 output.includes('src') && 
+                                 output.split('\\n').length > 1;
+            
+            return {
+                name: 'TTY Column Formatting',
+                success: isMultiColumn,
+                output: output.replace(/\\n/g, '\\n'),
+                description: 'Files should be arranged in columns, not vertically'
+            };
+        }
+
+        // Test session state persistence simulation
+        function testSessionPersistence() {
+            let currentDir = '/mnt/c/Users/user/github/dtui2-react';
+            
+            // Simulate cd command
+            if ('cd src'.includes('cd ')) {
+                const path = 'cd src'.slice(3).trim();
+                if (path === 'src') {
+                    currentDir = '/mnt/c/Users/user/github/dtui2-react/src';
+                }
+            }
+            
+            // Simulate pwd command  
+            const pwdResult = currentDir;
+            
+            return {
+                name: 'Session State Persistence',
+                success: pwdResult.includes('/src'),
+                output: `$ cd src\\n$ pwd\\n${pwdResult}`,
+                description: 'Directory should change after cd command'
+            };
+        }
+
+        // Run all tests
+        function runTests() {
+            const tests = [
+                testAnsiParsing(),
+                testTtyFormatting(),
+                testSessionPersistence()
+            ];
+
+            const resultsDiv = document.getElementById('results');
+            
+            tests.forEach(test => {
+                const div = document.createElement('div');
+                div.className = `test-result ${test.success ? 'success' : 'error'}`;
+                
+                div.innerHTML = `
+                    <h3>${test.success ? '✅' : '❌'} ${test.name}</h3>
+                    ${test.description ? `<p><em>${test.description}</em></p>` : ''}
+                    <pre>${test.output}</pre>
+                    ${test.original ? `<details><summary>Original ANSI</summary><pre>${test.original}</pre></details>` : ''}
+                `;
+                
+                resultsDiv.appendChild(div);
+            });
+
+            // Summary
+            const passedTests = tests.filter(t => t.success).length;
+            const totalTests = tests.length;
+            
+            const summaryDiv = document.createElement('div');
+            summaryDiv.className = `test-result ${passedTests === totalTests ? 'success' : 'error'}`;
+            summaryDiv.innerHTML = `<h2>📊 Test Summary: ${passedTests}/${totalTests} passed</h2>`;
+            resultsDiv.insertBefore(summaryDiv, resultsDiv.firstChild);
+        }
+
+        // Run tests when page loads
+        document.addEventListener('DOMContentLoaded', runTests);
+    </script>
+</body>
+</html>

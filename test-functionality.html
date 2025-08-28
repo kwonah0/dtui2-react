@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DTUI2 Functionality Test</title>
+    <style>
+        body {
+            font-family: Monaco, monospace;
+            background: #1e1e1e;
+            color: #fff;
+            padding: 20px;
+            margin: 0;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success { background: rgba(0, 255, 0, 0.1); border: 1px solid green; }
+        .error { background: rgba(255, 0, 0, 0.1); border: 1px solid red; }
+        .info { background: rgba(0, 123, 255, 0.1); border: 1px solid blue; }
+        pre { background: #2d2d2d; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🧪 DTUI2 Functionality Test</h1>
+    <div id="test-results"></div>
+
+    <script type="module">
+        // Import and test Mock AI functionality
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = message;
+            document.getElementById('test-results').appendChild(div);
+            console.log(message);
+        }
+
+        async function testMockAPI() {
+            try {
+                // Import Mock API
+                const { initializeMockAPI } = await import('/src/services/MockElectronAPI.js');
+                initializeMockAPI();
+                
+                if (window.electronAPI) {
+                    log('✅ Mock Electron API initialized successfully', 'success');
+                    
+                    // Test shell command
+                    const shellResult = await window.electronAPI.executeShellCommand('ls');
+                    log(`Shell command test: ${JSON.stringify(shellResult)}`, 'info');
+                    
+                    // Test file read
+                    const fileResult = await window.electronAPI.readFile('/package.json');
+                    log(`File read test: ${fileResult.success ? '✅ Success' : '❌ Failed'}`, fileResult.success ? 'success' : 'error');
+                    
+                    // Test directory list
+                    const dirResult = await window.electronAPI.listDirectory('.');
+                    log(`Directory list test: ${dirResult.success ? '✅ Success' : '❌ Failed'}`, dirResult.success ? 'success' : 'error');
+                    
+                    return true;
+                } else {
+                    log('❌ Mock Electron API not available', 'error');
+                    return false;
+                }
+            } catch (error) {
+                log(`❌ Mock API test failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function testAIProvider() {
+            try {
+                // Import AI Provider
+                const { AIProvider } = await import('/src/services/AIProvider.js');
+                const aiProvider = new AIProvider();
+                
+                log('✅ AI Provider initialized', 'success');
+                
+                // Test basic response
+                const testMessages = [{
+                    id: '1',
+                    role: 'user',
+                    content: 'Hello',
+                    timestamp: new Date()
+                }];
+                
+                const response = await aiProvider.generateResponse(testMessages);
+                log(`AI Response test: ${response ? '✅ Got response' : '❌ No response'}`, response ? 'success' : 'error');
+                if (response) {
+                    log(`<pre>Response: ${response}</pre>`, 'info');
+                }
+                
+                // Test shell command
+                const shellMessages = [{
+                    id: '2',
+                    role: 'user',
+                    content: '!ls',
+                    timestamp: new Date()
+                }];
+                
+                const shellResponse = await aiProvider.generateResponse(shellMessages);
+                log(`Shell command test: ${shellResponse ? '✅ Got response' : '❌ No response'}`, shellResponse ? 'success' : 'error');
+                
+                return true;
+            } catch (error) {
+                log(`❌ AI Provider test failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function runAllTests() {
+            log('🚀 Starting functionality tests...', 'info');
+            
+            const mockAPIResult = await testMockAPI();
+            const aiProviderResult = await testAIProvider();
+            
+            if (mockAPIResult && aiProviderResult) {
+                log('🎉 All tests passed! The application should work correctly.', 'success');
+            } else {
+                log('⚠️ Some tests failed. Check the errors above.', 'error');
+            }
+        }
+
+        // Run tests when page loads
+        runAllTests();
+    </script>
+</body>
+</html>
