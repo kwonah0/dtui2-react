@@ -478,8 +478,11 @@ ipcMain.handle('set-config', async (_, config) => {
   }
 });
 
-// Test shell agent functionality
+// Test shell agent functionality (disabled in production)
 ipcMain.handle('test-shell-agent', async () => {
+  return { success: false, message: 'Testing disabled in production' };
+  
+  /* Original implementation - disabled to prevent startup errors
   try {
     console.log('🧪 Testing shell agent from main process...');
     
@@ -560,6 +563,7 @@ ipcMain.handle('test-shell-agent', async () => {
       error: error.message
     };
   }
+  */
 });
 
 // Execute shell AI command (for renderer process)
