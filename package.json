@@ -65,7 +65,8 @@
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "dtui.json"
     ],
     "mac": {
       "category": "public.app-category.developer-tools"

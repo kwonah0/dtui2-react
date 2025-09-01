@@ -34,8 +34,7 @@ const createWindow = () => {
     mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-    // Open DevTools in production for debugging
-    mainWindow.webContents.openDevTools();
+    // DevTools disabled in production - can be opened with Ctrl+Shift+I or F12
   }
 
   mainWindow.once('ready-to-show', () => {
@@ -403,13 +402,61 @@ ipcMain.handle('show-save-dialog', async () => {
   return result;
 });
 
+// Helper function to get config path that works in AppImage
+const getConfigPath = () => {
+  // In AppImage, use app.getPath('userData') for writable location
+  if (process.env.APPIMAGE) {
+    return path.join(app.getPath('userData'), 'dtui.json');
+  }
+  // In development or regular build
+  return path.join(__dirname, '../dtui.json');
+};
+
+// Helper function to ensure default config exists
+const ensureDefaultConfig = async () => {
+  const configPath = getConfigPath();
+  try {
+    await fs.access(configPath);
+  } catch {
+    // Create default config if it doesn't exist
+    const defaultConfig = {
+      "ai": {
+        "provider": "shell",
+        "shell": {
+          "command": "echo",
+          "args": ["\"[SHELL RESPONSE]:\""],
+          "template": "{command} {args} \"{prompt}\"",
+          "timeout": 5000,
+          "streaming": false,
+          "outputFormat": {
+            "useCodeBlock": true,
+            "codeBlockSyntax": "shell"
+          }
+        }
+      },
+      "terminal": {
+        "shell": "/bin/bash",
+        "columns": 80,
+        "lines": 24
+      },
+      "ui": {
+        "theme": "dark",
+        "fontSize": 14
+      }
+    };
+    await fs.writeFile(configPath, JSON.stringify(defaultConfig, null, 2), 'utf-8');
+    console.log('Created default config at:', configPath);
+  }
+};
+
 // Configuration operations
 ipcMain.handle('get-config', async () => {
   try {
-    const configPath = path.join(__dirname, '../dtui.json');
+    await ensureDefaultConfig();
+    const configPath = getConfigPath();
     const configContent = await fs.readFile(configPath, 'utf-8');
     const config = JSON.parse(configContent);
-    console.log('Loaded Electron config:', config);
+    console.log('Loaded Electron config from:', configPath, config);
     return config;
   } catch (error) {
     console.error('Failed to load config:', error);
@@ -440,7 +487,8 @@ ipcMain.handle('get-config', async () => {
 
 ipcMain.handle('set-config', async (_, config) => {
   try {
-    const configPath = path.join(__dirname, '../dtui.json');
+    await ensureDefaultConfig();
+    const configPath = getConfigPath();
     await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
     
     // Notify renderer process of config change
@@ -461,7 +509,8 @@ ipcMain.handle('test-shell-agent', async () => {
     console.log('🧪 Testing shell agent from main process...');
     
     // Load config
-    const configPath = path.join(__dirname, '../dtui.json');
+    await ensureDefaultConfig();
+    const configPath = getConfigPath();
     const configContent = await fs.readFile(configPath, 'utf-8');
     const config = JSON.parse(configContent);
     
@@ -544,7 +593,8 @@ ipcMain.handle('execute-shell-ai-command', async (_, prompt) => {
     console.log('🧪 Executing shell AI command for prompt:', prompt);
     
     // Load config
-    const configPath = path.join(__dirname, '../dtui.json');
+    await ensureDefaultConfig();
+    const configPath = getConfigPath();
     const configContent = await fs.readFile(configPath, 'utf-8');
     const config = JSON.parse(configContent);
     
