@@ -403,24 +403,69 @@ ipcMain.handle('show-save-dialog', async () => {
   return result;
 });
 
-// Configuration operations - Using ConfigService with 3-stage priority system
+// Helper function to parse DTUI_CFG__ environment variables
+function parseEnvironmentConfig() {
+  const envConfig = {};
+  
+  // Parse all DTUI_CFG__ prefixed environment variables
+  Object.keys(process.env).forEach(key => {
+    if (key.startsWith('DTUI_CFG__')) {
+      const configPath = key.replace('DTUI_CFG__', '').toLowerCase();
+      const keys = configPath.split('__');
+      let value = process.env[key];
+      
+      // Try to parse JSON strings
+      if (typeof value === 'string') {
+        try {
+          if (value.startsWith('[') || value.startsWith('{')) {
+            value = JSON.parse(value);
+          } else if (value === 'true') {
+            value = true;
+          } else if (value === 'false') {
+            value = false;
+          } else if (!isNaN(value) && !isNaN(parseFloat(value))) {
+            value = parseFloat(value);
+          }
+        } catch (e) {
+          // Keep as string if not valid JSON
+        }
+      }
+      
+      // Set nested value
+      let current = envConfig;
+      for (let i = 0; i < keys.length - 1; i++) {
+        if (!current[keys[i]]) current[keys[i]] = {};
+        current = current[keys[i]];
+      }
+      current[keys[keys.length - 1]] = value;
+      
+      console.log(`🔧 Environment config: ${key} = ${JSON.stringify(value)}`);
+    }
+  });
+  
+  return envConfig;
+}
+
+// Helper function to merge configuration objects deeply
+function mergeConfig(base, override) {
+  const result = { ...base };
+  
+  for (const key in override) {
+    if (override[key] && typeof override[key] === 'object' && !Array.isArray(override[key])) {
+      result[key] = mergeConfig(base[key] || {}, override[key]);
+    } else {
+      result[key] = override[key];
+    }
+  }
+  
+  return result;
+}
+
+// Configuration operations - 3-stage priority system implemented directly
 ipcMain.handle('get-config', async () => {
   try {
-    // Import ConfigService dynamically to avoid module resolution issues
-    const { configService } = await import('../src/config/ConfigService.js');
-    
-    // ConfigService already implements the 3-stage priority system:
-    // 1. Environment variables (DTUI_CFG__)
-    // 2. User config file (DTUI_USER_CONFIGFILE)
-    // 3. Built-in dtui.json or defaults
-    const config = configService.getAll();
-    console.log('✅ Loaded config with 3-stage priority system:', config);
-    return config;
-  } catch (error) {
-    console.error('Failed to load config via ConfigService:', error);
-    
-    // Fallback to safe built-in defaults (compatible with both regular and HPC environments)
-    const fallbackConfig = {
+    // Stage 3: Built-in defaults (compatible with both regular and HPC environments)
+    let config = {
       ai: {
         provider: 'shell',
         shell: {
@@ -446,7 +491,60 @@ ipcMain.handle('get-config', async () => {
       }
     };
     
-    console.log('⚠️ Using built-in fallback config:', fallbackConfig);
+    // Stage 2: User config file (DTUI_USER_CONFIGFILE or dtui.json)
+    const configPath = process.env.DTUI_USER_CONFIGFILE || path.join(__dirname, '../dtui.json');
+    try {
+      if (require('fs').existsSync(configPath)) {
+        const fileContent = await fs.readFile(configPath, 'utf-8');
+        const fileConfig = JSON.parse(fileContent);
+        config = mergeConfig(config, fileConfig);
+        console.log(`✅ Loaded config file: ${configPath}`);
+      }
+    } catch (fileError) {
+      console.warn(`⚠️ Could not load config file ${configPath}:`, fileError.message);
+    }
+    
+    // Stage 1: Environment variables (highest priority)
+    const envConfig = parseEnvironmentConfig();
+    if (Object.keys(envConfig).length > 0) {
+      config = mergeConfig(config, envConfig);
+      console.log('✅ Applied environment variable overrides');
+    }
+    
+    console.log('🎯 Final merged configuration:', JSON.stringify(config, null, 2));
+    return config;
+    
+  } catch (error) {
+    console.error('❌ Failed to load configuration:', error);
+    
+    // Ultimate fallback
+    const fallbackConfig = {
+      ai: {
+        provider: 'shell',
+        shell: {
+          command: 'echo',
+          args: ['[FALLBACK]:'],
+          template: '{command} {args} "{prompt}"',
+          timeout: 10000,
+          streaming: false,
+          outputFormat: {
+            useCodeBlock: true,
+            codeBlockSyntax: 'shell'
+          }
+        }
+      },
+      terminal: {
+        shell: '/bin/bash',
+        columns: 80,
+        lines: 24
+      },
+      ui: {
+        theme: 'dark',
+        fontSize: 14
+      }
+    };
+    
+    console.log('🚨 Using ultimate fallback config:', fallbackConfig);
     return fallbackConfig;
   }
 });
@@ -473,10 +571,48 @@ ipcMain.handle('test-shell-agent', async () => {
   try {
     console.log('🧪 Testing shell agent from main process...');
     
-    // Load config
-    const configPath = path.join(__dirname, '../dtui.json');
-    const configContent = await fs.readFile(configPath, 'utf-8');
-    const config = JSON.parse(configContent);
+    // Load config using our 3-stage priority system - call the function directly
+    const config = await (async () => {
+      // Stage 3: Built-in defaults (compatible with both regular and HPC environments)
+      let config = {
+        ai: {
+          provider: 'shell',
+          shell: {
+            command: 'bash',
+            args: ['-c', 'echo "[DTUI-SHELL]:"; cat'],
+            template: '{command} {args} <<< "{prompt}"',
+            timeout: 10000,
+            streaming: false,
+            outputFormat: {
+              useCodeBlock: true,
+              codeBlockSyntax: 'shell'
+            }
+          }
+        }
+      };
+      
+      // Stage 2: User config file (DTUI_USER_CONFIGFILE or dtui.json)
+      const configPath = process.env.DTUI_USER_CONFIGFILE || path.join(__dirname, '../dtui.json');
+      try {
+        if (require('fs').existsSync(configPath)) {
+          const fileContent = await fs.readFile(configPath, 'utf-8');
+          const fileConfig = JSON.parse(fileContent);
+          config = mergeConfig(config, fileConfig);
+          console.log(`✅ Loaded config file: ${configPath}`);
+        }
+      } catch (fileError) {
+        console.warn(`⚠️ Could not load config file ${configPath}:`, fileError.message);
+      }
+      
+      // Stage 1: Environment variables (highest priority)
+      const envConfig = parseEnvironmentConfig();
+      if (Object.keys(envConfig).length > 0) {
+        config = mergeConfig(config, envConfig);
+        console.log('✅ Applied environment variable overrides');
+      }
+      
+      return config;
+    })();
     
     console.log('Shell config:', config.ai.shell);
     
@@ -551,15 +687,51 @@ ipcMain.handle('test-shell-agent', async () => {
   }
 });
 
-// Execute shell AI command (for renderer process)
+// Execute shell AI command (for renderer process)  
 ipcMain.handle('execute-shell-ai-command', async (_, prompt) => {
   try {
     console.log('🧪 Executing shell AI command for prompt:', prompt);
     
-    // Load config
-    const configPath = path.join(__dirname, '../dtui.json');
-    const configContent = await fs.readFile(configPath, 'utf-8');
-    const config = JSON.parse(configContent);
+    // Load config using our 3-stage priority system - call the function directly
+    const config = await (async () => {
+      // Stage 3: Built-in defaults (compatible with both regular and HPC environments)
+      let config = {
+        ai: {
+          provider: 'shell',
+          shell: {
+            command: 'bash',
+            args: ['-c', 'echo "[DTUI-SHELL]:"; cat'],
+            template: '{command} {args} <<< "{prompt}"',
+            timeout: 10000,
+            streaming: false,
+            outputFormat: {
+              useCodeBlock: true,
+              codeBlockSyntax: 'shell'
+            }
+          }
+        }
+      };
+      
+      // Stage 2: User config file (DTUI_USER_CONFIGFILE or dtui.json)
+      const configPath = process.env.DTUI_USER_CONFIGFILE || path.join(__dirname, '../dtui.json');
+      try {
+        if (require('fs').existsSync(configPath)) {
+          const fileContent = await fs.readFile(configPath, 'utf-8');
+          const fileConfig = JSON.parse(fileContent);
+          config = mergeConfig(config, fileConfig);
+        }
+      } catch (fileError) {
+        console.warn(`⚠️ Could not load config file ${configPath}:`, fileError.message);
+      }
+      
+      // Stage 1: Environment variables (highest priority)
+      const envConfig = parseEnvironmentConfig();
+      if (Object.keys(envConfig).length > 0) {
+        config = mergeConfig(config, envConfig);
+      }
+      
+      return config;
+    })();
     
     const shellConfig = config.ai.shell;
     console.log('Using shell config:', shellConfig);
