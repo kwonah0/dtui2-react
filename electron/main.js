@@ -469,9 +469,9 @@ ipcMain.handle('get-config', async () => {
       ai: {
         provider: 'shell',
         shell: {
-          command: 'bash',
-          args: ['-c', 'echo "[DTUI-SHELL]:"; cat'],
-          template: '{command} {args} <<< "{prompt}"',
+          command: 'echo',
+          args: ['[DTUI-SHELL]:'],
+          template: '{command} {args} "{prompt}"',
           timeout: 10000,
           streaming: false,
           outputFormat: {
@@ -584,9 +584,9 @@ ipcMain.handle('test-shell-agent', async () => {
         ai: {
           provider: 'shell',
           shell: {
-            command: 'bash',
-            args: ['-c', 'echo "[DTUI-SHELL]:"; cat'],
-            template: '{command} {args} <<< "{prompt}"',
+            command: 'echo',
+            args: ['[DTUI-SHELL]:'],
+            template: '{command} "{args} {prompt}"',
             timeout: 10000,
             streaming: false,
             outputFormat: {
@@ -706,9 +706,9 @@ ipcMain.handle('execute-shell-ai-command', async (_, prompt) => {
         ai: {
           provider: 'shell',
           shell: {
-            command: 'bash',
-            args: ['-c', 'echo "[DTUI-SHELL]:"; cat'],
-            template: '{command} {args} <<< "{prompt}"',
+            command: 'echo',
+            args: ['[DTUI-SHELL]:'],
+            template: '{command} "{args} {prompt}"',
             timeout: 10000,
             streaming: false,
             outputFormat: {
