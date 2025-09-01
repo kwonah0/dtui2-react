@@ -6,7 +6,11 @@
       "args": ["\"[SHELL RESPONSE]:\""],
       "template": "{command} {args} \"{prompt}\"",
       "timeout": 5000,
-      "streaming": false
+      "streaming": false,
+      "outputFormat": {
+        "useCodeBlock": true,
+        "codeBlockSyntax": "shell"
+      }
     }
   },
   "terminal": {

@@ -1,4 +1,5 @@
 import { AIAgent, AIAgentResult } from '../services/MockAIAgent';
+import { universalConfigService } from '../config/UniversalConfigService';
 
 /**
  * Electron Shell AI Agent that uses IPC to execute shell commands in main process
@@ -6,6 +7,10 @@ import { AIAgent, AIAgentResult } from '../services/MockAIAgent';
  */
 export class ElectronShellAIAgent implements AIAgent {
   name = 'Electron IPC Shell AI Agent';
+  private outputConfig: { useCodeBlock: boolean; codeBlockSyntax: string } = {
+    useCodeBlock: true,
+    codeBlockSyntax: 'shell'
+  };
   
   async executeCommand(_command: string): Promise<AIAgentResult> {
     return {
@@ -36,6 +41,16 @@ export class ElectronShellAIAgent implements AIAgent {
   async generateResponse(messages: any[]): Promise<string> {
     console.log('🎯 ElectronShellAIAgent.generateResponse called with messages:', messages);
     
+    // Load output format config
+    const shellConfig = universalConfigService.get<any>('ai:shell');
+    if (shellConfig?.outputFormat) {
+      this.outputConfig = {
+        useCodeBlock: shellConfig.outputFormat.useCodeBlock ?? true,
+        codeBlockSyntax: shellConfig.outputFormat.codeBlockSyntax || 'shell'
+      };
+    }
+    console.log('Using output config:', this.outputConfig);
+    
     // Convert message history to a single prompt
     const lastMessage = messages[messages.length - 1];
     const prompt = lastMessage?.content || '';
@@ -45,26 +60,36 @@ export class ElectronShellAIAgent implements AIAgent {
     const result = await this.query(prompt);
     console.log('ElectronShellAIAgent query result:', result);
     
-    // Format output for markdown rendering (with code blocks)
+    // Format output based on config
     let output = '';
+    const wrapInCodeBlock = (text: string) => {
+      if (this.outputConfig.useCodeBlock) {
+        return `\`\`\`${this.outputConfig.codeBlockSyntax}\n${text}\n\`\`\``;
+      }
+      return text;
+    };
+    
     if (result.success) {
       const stdout = result.metadata?.stdout || result.content || 'Command completed successfully';
-      output = `\`\`\`\n${stdout}\n\`\`\``;
+      output = wrapInCodeBlock(stdout);
       
       // Include stderr if present
       if (result.metadata?.stderr && result.metadata.stderr.trim()) {
-        output += `\n\n**stderr:**\n\`\`\`\n${result.metadata.stderr.trim()}\n\`\`\``;
+        const stderrFormatted = wrapInCodeBlock(result.metadata.stderr.trim());
+        output += `\n\n**stderr:**\n${stderrFormatted}`;
       }
     } else {
       // For failures, show comprehensive error info in markdown format
       output = '**Command failed**\n\n';
       
       if (result.metadata?.stderr && result.metadata.stderr.trim()) {
-        output += `**stderr:**\n\`\`\`\n${result.metadata.stderr.trim()}\n\`\`\`\n\n`;
+        const stderrFormatted = wrapInCodeBlock(result.metadata.stderr.trim());
+        output += `**stderr:**\n${stderrFormatted}\n\n`;
       }
       
       if (result.metadata?.stdout && result.metadata.stdout.trim()) {
-        output += `**stdout:**\n\`\`\`\n${result.metadata.stdout.trim()}\n\`\`\`\n\n`;
+        const stdoutFormatted = wrapInCodeBlock(result.metadata.stdout.trim());
+        output += `**stdout:**\n${stdoutFormatted}\n\n`;
       }
       
       if (result.metadata?.exitCode !== undefined) {
