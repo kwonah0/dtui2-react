@@ -491,17 +491,23 @@ ipcMain.handle('get-config', async () => {
       }
     };
     
-    // Stage 2: User config file (DTUI_USER_CONFIGFILE or dtui.json)
-    const configPath = process.env.DTUI_USER_CONFIGFILE || path.join(__dirname, '../dtui.json');
-    try {
-      if (require('fs').existsSync(configPath)) {
-        const fileContent = await fs.readFile(configPath, 'utf-8');
-        const fileConfig = JSON.parse(fileContent);
-        config = mergeConfig(config, fileConfig);
-        console.log(`✅ Loaded config file: ${configPath}`);
+    // Stage 2: User config file (only if DTUI_USER_CONFIGFILE is specified)
+    if (process.env.DTUI_USER_CONFIGFILE) {
+      const configPath = process.env.DTUI_USER_CONFIGFILE;
+      try {
+        if (require('fs').existsSync(configPath)) {
+          const fileContent = await fs.readFile(configPath, 'utf-8');
+          const fileConfig = JSON.parse(fileContent);
+          config = mergeConfig(config, fileConfig);
+          console.log(`✅ Loaded user config file: ${configPath}`);
+        } else {
+          console.warn(`⚠️ User config file specified but not found: ${configPath}`);
+        }
+      } catch (fileError) {
+        console.error(`❌ Failed to load user config file ${configPath}:`, fileError.message);
       }
-    } catch (fileError) {
-      console.warn(`⚠️ Could not load config file ${configPath}:`, fileError.message);
+    } else {
+      console.log('ℹ️ No DTUI_USER_CONFIGFILE specified, skipping user config file stage');
     }
     
     // Stage 1: Environment variables (highest priority)
@@ -591,17 +597,18 @@ ipcMain.handle('test-shell-agent', async () => {
         }
       };
       
-      // Stage 2: User config file (DTUI_USER_CONFIGFILE or dtui.json)
-      const configPath = process.env.DTUI_USER_CONFIGFILE || path.join(__dirname, '../dtui.json');
-      try {
-        if (require('fs').existsSync(configPath)) {
-          const fileContent = await fs.readFile(configPath, 'utf-8');
-          const fileConfig = JSON.parse(fileContent);
-          config = mergeConfig(config, fileConfig);
-          console.log(`✅ Loaded config file: ${configPath}`);
+      // Stage 2: User config file (only if DTUI_USER_CONFIGFILE is specified)
+      if (process.env.DTUI_USER_CONFIGFILE) {
+        const configPath = process.env.DTUI_USER_CONFIGFILE;
+        try {
+          if (require('fs').existsSync(configPath)) {
+            const fileContent = await fs.readFile(configPath, 'utf-8');
+            const fileConfig = JSON.parse(fileContent);
+            config = mergeConfig(config, fileConfig);
+          }
+        } catch (fileError) {
+          console.warn(`⚠️ Could not load user config file ${configPath}:`, fileError.message);
         }
-      } catch (fileError) {
-        console.warn(`⚠️ Could not load config file ${configPath}:`, fileError.message);
       }
       
       // Stage 1: Environment variables (highest priority)
@@ -712,16 +719,18 @@ ipcMain.handle('execute-shell-ai-command', async (_, prompt) => {
         }
       };
       
-      // Stage 2: User config file (DTUI_USER_CONFIGFILE or dtui.json)
-      const configPath = process.env.DTUI_USER_CONFIGFILE || path.join(__dirname, '../dtui.json');
-      try {
-        if (require('fs').existsSync(configPath)) {
-          const fileContent = await fs.readFile(configPath, 'utf-8');
-          const fileConfig = JSON.parse(fileContent);
-          config = mergeConfig(config, fileConfig);
+      // Stage 2: User config file (only if DTUI_USER_CONFIGFILE is specified)
+      if (process.env.DTUI_USER_CONFIGFILE) {
+        const configPath = process.env.DTUI_USER_CONFIGFILE;
+        try {
+          if (require('fs').existsSync(configPath)) {
+            const fileContent = await fs.readFile(configPath, 'utf-8');
+            const fileConfig = JSON.parse(fileContent);
+            config = mergeConfig(config, fileConfig);
+          }
+        } catch (fileError) {
+          console.warn(`⚠️ Could not load user config file ${configPath}:`, fileError.message);
         }
-      } catch (fileError) {
-        console.warn(`⚠️ Could not load config file ${configPath}:`, fileError.message);
       }
       
       // Stage 1: Environment variables (highest priority)
