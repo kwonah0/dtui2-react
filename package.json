@@ -71,10 +71,25 @@
       "category": "public.app-category.developer-tools"
     },
     "win": {
-      "target": "nsis"
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        }
+      ]
     },
     "linux": {
-      "target": "AppImage"
+      "target": [
+        "AppImage",
+        "tar.gz"
+      ]
+    },
+    "portable": {
+      "artifactName": "DTUI2-portable-${version}.${ext}"
     }
   }
 }
