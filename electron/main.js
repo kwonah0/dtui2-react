@@ -3,6 +3,14 @@ const path = require('path');
 const fs = require('fs').promises;
 const { spawn } = require('child_process');
 
+// Disable GPU acceleration warnings and errors
+app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+app.commandLine.appendSwitch('disable-gpu-sandbox');
+app.commandLine.appendSwitch('no-sandbox');
+// Suppress libva errors
+process.env.LIBVA_DRIVER_NAME = 'null';
+
 let mainWindow;
 let shellSession = null;
 let currentWorkingDirectory = process.cwd();
@@ -39,39 +47,6 @@ const createWindow = () => {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
-    
-    // Test renderer process AIProvider after a delay
-    setTimeout(() => {
-      console.log('🧪 Testing renderer AIProvider from main process...');
-      mainWindow.webContents.executeJavaScript(`
-        try {
-          console.log('=== RENDERER SCRIPT EXECUTION START ===');
-          console.log('Window object keys:', Object.keys(window).filter(k => k.includes('test')));
-          console.log('testAIProvider type:', typeof window.testAIProvider);
-          
-          if (typeof window.testAIProvider === 'function') {
-            console.log('=== CALLING GLOBAL TEST FUNCTION ===');
-            return window.testAIProvider().catch(err => {
-              console.error('testAIProvider function error:', err);
-              return 'Function execution error: ' + err.message;
-            });
-          } else {
-            console.error('Global testAIProvider function not available');
-            return 'Error: Global function not found';
-          }
-        } catch (error) {
-          console.error('=== RENDERER SCRIPT ERROR ===', error);
-          return 'Script error: ' + error.message + ' | Stack: ' + error.stack;
-        }
-      `).then(result => {
-        console.log('📊 Renderer test completed:', result);
-      }).catch(error => {
-        console.error('❌ Renderer test failed:');
-        console.error('Error message:', error.message);
-        console.error('Error stack:', error.stack);
-        console.error('Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
-      });
-    }, 3000);
   });
 };
 
