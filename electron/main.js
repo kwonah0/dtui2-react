@@ -3,17 +3,6 @@ const path = require('path');
 const fs = require('fs').promises;
 const { spawn } = require('child_process');
 
-// Disable GPU acceleration warnings and errors
-app.commandLine.appendSwitch('disable-gpu');
-app.commandLine.appendSwitch('disable-software-rasterizer');
-app.commandLine.appendSwitch('disable-gpu-sandbox');
-app.commandLine.appendSwitch('no-sandbox');
-// Fix shared memory issues for non-root users
-app.commandLine.appendSwitch('disable-dev-shm-usage');
-app.commandLine.appendSwitch('in-process-gpu');
-// Suppress libva errors
-process.env.LIBVA_DRIVER_NAME = 'null';
-
 let mainWindow;
 let shellSession = null;
 let currentWorkingDirectory = process.cwd();
@@ -45,11 +34,45 @@ const createWindow = () => {
     mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-    // DevTools disabled in production - can be opened with Ctrl+Shift+I or F12
+    // Open DevTools in production for debugging
+    mainWindow.webContents.openDevTools();
   }
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    
+    // Test renderer process AIProvider after a delay
+    setTimeout(() => {
+      console.log('🧪 Testing renderer AIProvider from main process...');
+      mainWindow.webContents.executeJavaScript(`
+        try {
+          console.log('=== RENDERER SCRIPT EXECUTION START ===');
+          console.log('Window object keys:', Object.keys(window).filter(k => k.includes('test')));
+          console.log('testAIProvider type:', typeof window.testAIProvider);
+          
+          if (typeof window.testAIProvider === 'function') {
+            console.log('=== CALLING GLOBAL TEST FUNCTION ===');
+            return window.testAIProvider().catch(err => {
+              console.error('testAIProvider function error:', err);
+              return 'Function execution error: ' + err.message;
+            });
+          } else {
+            console.error('Global testAIProvider function not available');
+            return 'Error: Global function not found';
+          }
+        } catch (error) {
+          console.error('=== RENDERER SCRIPT ERROR ===', error);
+          return 'Script error: ' + error.message + ' | Stack: ' + error.stack;
+        }
+      `).then(result => {
+        console.log('📊 Renderer test completed:', result);
+      }).catch(error => {
+        console.error('❌ Renderer test failed:');
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+        console.error('Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+      });
+    }, 3000);
   });
 };
 
@@ -380,74 +403,36 @@ ipcMain.handle('show-save-dialog', async () => {
   return result;
 });
 
-// Helper function to get config path that works in AppImage
-const getConfigPath = () => {
-  // In AppImage, use app.getPath('userData') for writable location
-  if (process.env.APPIMAGE) {
-    return path.join(app.getPath('userData'), 'dtui.json');
-  }
-  // In development or regular build
-  return path.join(__dirname, '../dtui.json');
-};
-
-// Helper function to ensure default config exists
-const ensureDefaultConfig = async () => {
-  const configPath = getConfigPath();
-  try {
-    await fs.access(configPath);
-  } catch {
-    // Create default config if it doesn't exist
-    const defaultConfig = {
-      "ai": {
-        "provider": "shell",
-        "shell": {
-          "command": "echo",
-          "args": ["\"[SHELL RESPONSE]:\""],
-          "template": "{command} {args} \"{prompt}\"",
-          "timeout": 5000,
-          "streaming": false,
-          "outputFormat": {
-            "useCodeBlock": true,
-            "codeBlockSyntax": "shell"
-          }
-        }
-      },
-      "terminal": {
-        "shell": "/bin/bash",
-        "columns": 80,
-        "lines": 24
-      },
-      "ui": {
-        "theme": "dark",
-        "fontSize": 14
-      }
-    };
-    await fs.writeFile(configPath, JSON.stringify(defaultConfig, null, 2), 'utf-8');
-    console.log('Created default config at:', configPath);
-  }
-};
-
-// Configuration operations
+// Configuration operations - Using ConfigService with 3-stage priority system
 ipcMain.handle('get-config', async () => {
   try {
-    await ensureDefaultConfig();
-    const configPath = getConfigPath();
-    const configContent = await fs.readFile(configPath, 'utf-8');
-    const config = JSON.parse(configContent);
-    console.log('Loaded Electron config from:', configPath, config);
+    // Import ConfigService dynamically to avoid module resolution issues
+    const { configService } = await import('../src/config/ConfigService.js');
+    
+    // ConfigService already implements the 3-stage priority system:
+    // 1. Environment variables (DTUI_CFG__)
+    // 2. User config file (DTUI_USER_CONFIGFILE)
+    // 3. Built-in dtui.json or defaults
+    const config = configService.getAll();
+    console.log('✅ Loaded config with 3-stage priority system:', config);
     return config;
   } catch (error) {
-    console.error('Failed to load config:', error);
-    // Return default configuration
-    return {
+    console.error('Failed to load config via ConfigService:', error);
+    
+    // Fallback to safe built-in defaults (compatible with both regular and HPC environments)
+    const fallbackConfig = {
       ai: {
         provider: 'shell',
         shell: {
-          command: 'echo',
-          args: ['[Electron Shell Response]:'],
-          template: '{command} {args} "{prompt}"',
+          command: 'bash',
+          args: ['-c', 'echo "[DTUI-SHELL]:"; cat'],
+          template: '{command} {args} <<< "{prompt}"',
           timeout: 10000,
-          streaming: false
+          streaming: false,
+          outputFormat: {
+            useCodeBlock: true,
+            codeBlockSyntax: 'shell'
+          }
         }
       },
       terminal: {
@@ -460,13 +445,15 @@ ipcMain.handle('get-config', async () => {
         fontSize: 14
       }
     };
+    
+    console.log('⚠️ Using built-in fallback config:', fallbackConfig);
+    return fallbackConfig;
   }
 });
 
 ipcMain.handle('set-config', async (_, config) => {
   try {
-    await ensureDefaultConfig();
-    const configPath = getConfigPath();
+    const configPath = path.join(__dirname, '../dtui.json');
     await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
     
     // Notify renderer process of config change
@@ -481,17 +468,13 @@ ipcMain.handle('set-config', async (_, config) => {
   }
 });
 
-// Test shell agent functionality (disabled in production)
+// Test shell agent functionality
 ipcMain.handle('test-shell-agent', async () => {
-  return { success: false, message: 'Testing disabled in production' };
-  
-  /* Original implementation - disabled to prevent startup errors
   try {
     console.log('🧪 Testing shell agent from main process...');
     
     // Load config
-    await ensureDefaultConfig();
-    const configPath = getConfigPath();
+    const configPath = path.join(__dirname, '../dtui.json');
     const configContent = await fs.readFile(configPath, 'utf-8');
     const config = JSON.parse(configContent);
     
@@ -566,7 +549,6 @@ ipcMain.handle('test-shell-agent', async () => {
       error: error.message
     };
   }
-  */
 });
 
 // Execute shell AI command (for renderer process)
@@ -575,8 +557,7 @@ ipcMain.handle('execute-shell-ai-command', async (_, prompt) => {
     console.log('🧪 Executing shell AI command for prompt:', prompt);
     
     // Load config
-    await ensureDefaultConfig();
-    const configPath = getConfigPath();
+    const configPath = path.join(__dirname, '../dtui.json');
     const configContent = await fs.readFile(configPath, 'utf-8');
     const config = JSON.parse(configContent);
     

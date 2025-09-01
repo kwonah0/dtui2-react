@@ -7,10 +7,17 @@ import { universalConfigService } from '../config/UniversalConfigService';
  */
 export class ElectronShellAIAgent implements AIAgent {
   name = 'Electron IPC Shell AI Agent';
-  private outputConfig: { useCodeBlock: boolean; codeBlockSyntax: string } = {
-    useCodeBlock: true,
-    codeBlockSyntax: 'shell'
-  };
+  private outputConfig: { useCodeBlock: boolean; codeBlockSyntax: string };
+  
+  constructor() {
+    // Built-in safe defaults compatible with both regular and HPC environments
+    this.outputConfig = {
+      useCodeBlock: true,
+      codeBlockSyntax: 'shell'
+    };
+    
+    console.log('🔧 ElectronShellAIAgent initialized with built-in defaults');
+  }
   
   async executeCommand(_command: string): Promise<AIAgentResult> {
     return {
@@ -41,15 +48,17 @@ export class ElectronShellAIAgent implements AIAgent {
   async generateResponse(messages: any[]): Promise<string> {
     console.log('🎯 ElectronShellAIAgent.generateResponse called with messages:', messages);
     
-    // Load output format config
+    // Load output format config with built-in fallbacks
     const shellConfig = universalConfigService.get<any>('ai:shell');
     if (shellConfig?.outputFormat) {
       this.outputConfig = {
-        useCodeBlock: shellConfig.outputFormat.useCodeBlock ?? true,
-        codeBlockSyntax: shellConfig.outputFormat.codeBlockSyntax || 'shell'
+        useCodeBlock: shellConfig.outputFormat.useCodeBlock ?? this.outputConfig.useCodeBlock,
+        codeBlockSyntax: shellConfig.outputFormat.codeBlockSyntax || this.outputConfig.codeBlockSyntax
       };
+      console.log('✅ Using config-based output format:', this.outputConfig);
+    } else {
+      console.log('⚠️ No config found, using built-in defaults:', this.outputConfig);
     }
-    console.log('Using output config:', this.outputConfig);
     
     // Convert message history to a single prompt
     const lastMessage = messages[messages.length - 1];

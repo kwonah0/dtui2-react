@@ -12,11 +12,24 @@ export class ShellAIAgent implements AIAgent {
   private config: ShellAIConfig;
   
   constructor() {
-    this.config = configService.get<ShellAIConfig>('ai:shell') || {
-      command: 'echo',
-      args: ['AI Response:'],
-      template: '{command} {args} "{prompt}"'
+    // Built-in safe defaults compatible with both regular and HPC environments
+    const builtInDefaults: ShellAIConfig = {
+      command: 'bash',
+      args: ['-c', 'echo "[DTUI-SHELL]:"; cat'],
+      template: '{command} {args} <<< "{prompt}"',
+      timeout: 10000,
+      streaming: false,
+      outputFormat: {
+        useCodeBlock: true,
+        codeBlockSyntax: 'shell'
+      }
     };
+    
+    // Try to load from config service, fallback to built-in defaults
+    const configFromService = configService.get<ShellAIConfig>('ai:shell');
+    this.config = configFromService ? { ...builtInDefaults, ...configFromService } : builtInDefaults;
+    
+    console.log('🔧 ShellAIAgent initialized with config:', this.config);
   }
   
   async executeCommand(_command: string): Promise<AIAgentResult> {
@@ -228,10 +241,23 @@ export class ShellAIAgent implements AIAgent {
    * Reload configuration
    */
   reload(): void {
-    this.config = configService.get<ShellAIConfig>('ai:shell') || {
-      command: 'echo',
-      args: ['AI Response:'],
-      template: '{command} {args} "{prompt}"'
+    // Built-in safe defaults compatible with both regular and HPC environments
+    const builtInDefaults: ShellAIConfig = {
+      command: 'bash',
+      args: ['-c', 'echo "[DTUI-SHELL]:"; cat'],
+      template: '{command} {args} <<< "{prompt}"',
+      timeout: 10000,
+      streaming: false,
+      outputFormat: {
+        useCodeBlock: true,
+        codeBlockSyntax: 'shell'
+      }
     };
+    
+    // Try to load from config service, fallback to built-in defaults
+    const configFromService = configService.get<ShellAIConfig>('ai:shell');
+    this.config = configFromService ? { ...builtInDefaults, ...configFromService } : builtInDefaults;
+    
+    console.log('🔄 ShellAIAgent config reloaded:', this.config);
   }
 }

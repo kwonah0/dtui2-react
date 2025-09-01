@@ -39,17 +39,23 @@ export class UniversalConfigService {
 
   private async loadElectronConfig(): Promise<void> {
     try {
-      // In Electron, we can use full ConfigService via IPC
+      // In Electron, we should use the full ConfigService with 3-stage priority system
+      // This includes: 1) Environment variables (DTUI_CFG__), 2) User config file (DTUI_USER_CONFIGFILE), 3) Built-in defaults
       if ((window as any).electronAPI && (window as any).electronAPI.getConfig) {
-        this.config = await (window as any).electronAPI.getConfig();
+        const electronConfig = await (window as any).electronAPI.getConfig();
+        
+        // The IPC getConfig should already include the 3-stage priority system from ConfigService
+        this.config = electronConfig;
+        console.log('✅ Loaded Electron config with 3-stage priority system:', this.config);
         return;
       }
     } catch (error) {
-      console.warn('Failed to load Electron config, using defaults:', error);
+      console.warn('Failed to load Electron config via IPC, using built-in defaults:', error);
     }
     
-    // Fallback to default config
-    this.config = { ...DEFAULT_CONFIG };
+    // Fallback to safe built-in defaults (compatible with both regular and HPC environments)
+    this.config = this.getBuiltInDefaults();
+    console.log('⚠️ Using built-in fallback config:', this.config);
   }
 
   private async loadBrowserConfig(): Promise<void> {
@@ -83,21 +89,20 @@ export class UniversalConfigService {
     console.log('Using enhanced browser default config');
   }
 
-  private getBrowserDefaultConfig(): DtuiConfig {
-    // Enhanced default config that enables shell agent testing in browser
+  private getBuiltInDefaults(): DtuiConfig {
+    // Safe built-in defaults compatible with both regular and HPC environments
     return {
-      ...DEFAULT_CONFIG,
       ai: {
-        provider: 'shell',  // Enable shell provider
+        provider: 'shell',
         shell: {
-          command: 'echo',
-          args: ['[Mock Shell Response]:'],
-          template: '{command} {args} "{prompt}"',
+          command: 'bash',
+          args: ['-c', 'echo "[DTUI-SHELL]:"; cat'],
+          template: '{command} {args} <<< "{prompt}"',
           timeout: 10000,
           streaming: false,
-          workingDirectory: '/browser/simulation',
-          env: {
-            BROWSER_MODE: 'true'
+          outputFormat: {
+            useCodeBlock: true,
+            codeBlockSyntax: 'shell'
           }
         },
         api: {
@@ -109,6 +114,40 @@ export class UniversalConfigService {
         },
         mock: {
           delay: 500
+        }
+      },
+      terminal: {
+        shell: '/bin/bash',
+        columns: 80,
+        lines: 24
+      },
+      ui: {
+        theme: 'dark',
+        fontSize: 14
+      }
+    };
+  }
+
+  private getBrowserDefaultConfig(): DtuiConfig {
+    // Enhanced default config that enables shell agent testing in browser
+    return {
+      ...this.getBuiltInDefaults(),
+      ai: {
+        ...this.getBuiltInDefaults().ai,
+        shell: {
+          command: 'echo',
+          args: ['[Mock Shell Response]:'],
+          template: '{command} {args} "{prompt}"',
+          timeout: 10000,
+          streaming: false,
+          workingDirectory: '/browser/simulation',
+          env: {
+            BROWSER_MODE: 'true'
+          },
+          outputFormat: {
+            useCodeBlock: true,
+            codeBlockSyntax: 'shell'
+          }
         }
       }
     };
