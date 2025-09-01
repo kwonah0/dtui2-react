@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=DTUI2
+Comment=Claude Code Style AI Terminal Desktop App
+Exec=dtui2-react --no-sandbox --disable-dev-shm-usage %U
+Terminal=false
+Type=Application
+Icon=dtui2-react
+Categories=Development;

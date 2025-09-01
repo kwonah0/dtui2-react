@@ -8,6 +8,9 @@ app.commandLine.appendSwitch('disable-gpu');
 app.commandLine.appendSwitch('disable-software-rasterizer');
 app.commandLine.appendSwitch('disable-gpu-sandbox');
 app.commandLine.appendSwitch('no-sandbox');
+// Fix shared memory issues for non-root users
+app.commandLine.appendSwitch('disable-dev-shm-usage');
+app.commandLine.appendSwitch('in-process-gpu');
 // Suppress libva errors
 process.env.LIBVA_DRIVER_NAME = 'null';
 
