@@ -7,13 +7,26 @@ import { universalConfigService } from '../config/UniversalConfigService';
  */
 export class ElectronShellAIAgent implements AIAgent {
   name = 'Electron IPC Shell AI Agent';
-  private outputConfig: { useCodeBlock: boolean; codeBlockSyntax: string };
+  private outputConfig: { 
+    useCodeBlock: boolean; 
+    codeBlockSyntax: string;
+    extraction: {
+      enabled: boolean;
+      startMarker: string;
+      endMarker: string;
+    };
+  };
   
   constructor() {
     // Built-in safe defaults compatible with both regular and HPC environments
     this.outputConfig = {
       useCodeBlock: true,
-      codeBlockSyntax: 'shell'
+      codeBlockSyntax: 'shell',
+      extraction: {
+        enabled: true,
+        startMarker: '<RESPONSE>',
+        endMarker: '</RESPONSE>'
+      }
     };
     
     console.log('🔧 ElectronShellAIAgent initialized with built-in defaults');
@@ -53,7 +66,12 @@ export class ElectronShellAIAgent implements AIAgent {
     if (shellConfig?.outputFormat) {
       this.outputConfig = {
         useCodeBlock: shellConfig.outputFormat.useCodeBlock ?? this.outputConfig.useCodeBlock,
-        codeBlockSyntax: shellConfig.outputFormat.codeBlockSyntax || this.outputConfig.codeBlockSyntax
+        codeBlockSyntax: shellConfig.outputFormat.codeBlockSyntax || this.outputConfig.codeBlockSyntax,
+        extraction: {
+          enabled: shellConfig.outputFormat.extraction?.enabled ?? this.outputConfig.extraction.enabled,
+          startMarker: shellConfig.outputFormat.extraction?.startMarker || this.outputConfig.extraction.startMarker,
+          endMarker: shellConfig.outputFormat.extraction?.endMarker || this.outputConfig.extraction.endMarker
+        }
       };
       console.log('✅ Using config-based output format:', this.outputConfig);
     } else {
@@ -88,12 +106,32 @@ export class ElectronShellAIAgent implements AIAgent {
       return text;
     };
     
+    const extractResponse = (text: string) => {
+      if (!this.outputConfig.extraction.enabled) {
+        return text;
+      }
+      
+      const { startMarker, endMarker } = this.outputConfig.extraction;
+      const startIndex = text.indexOf(startMarker);
+      const endIndex = text.indexOf(endMarker);
+      
+      if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+        const extracted = text.substring(startIndex + startMarker.length, endIndex).trim();
+        console.log('✅ Extracted response between markers:', { startIndex, endIndex, extracted: extracted.slice(0, 100) + '...' });
+        return extracted;
+      }
+      
+      console.log('⚠️ Markers not found, using fallback (full output)');
+      return text;
+    };
+    
     if (result.success) {
       const stdout = result.metadata?.stdout || result.content || 'Command completed successfully';
-      output = wrapInCodeBlock(stdout);
+      const extractedOutput = extractResponse(stdout);
+      output = wrapInCodeBlock(extractedOutput);
       
-      // Include stderr if present
-      if (result.metadata?.stderr && result.metadata.stderr.trim()) {
+      // Include stderr if present (only if extraction didn't reduce the output)
+      if (result.metadata?.stderr && result.metadata.stderr.trim() && extractedOutput === stdout) {
         const stderrFormatted = wrapInCodeBlock(result.metadata.stderr.trim());
         output += `\n\n**stderr:**\n${stderrFormatted}`;
       }

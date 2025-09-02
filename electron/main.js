@@ -683,14 +683,19 @@ ipcMain.handle('get-config', async () => {
         provider: 'shell',
         shell: {
           command: 'echo',
-          args: ['[DTUI-SHELL]:'],
+          args: [],
           template: '{command} "{args} {prompt}"',
           timeout: 10000,
           streaming: false,
           usePty: true,
           outputFormat: {
-            useCodeBlock: true,
-            codeBlockSyntax: 'shell'
+            useCodeBlock: false,
+            codeBlockSyntax: 'shell',
+            extraction: {
+              enabled: true,
+              startMarker: '<RESPONSE>',
+              endMarker: '</RESPONSE>'
+            }
           }
         }
       },
@@ -799,13 +804,13 @@ ipcMain.handle('test-shell-agent', async () => {
           provider: 'shell',
           shell: {
             command: 'echo',
-            args: ['[DTUI-SHELL]:'],
+            args: [],
             template: '{command} "{args} {prompt}"',
             timeout: 10000,
             streaming: false,
             usePty: true,
             outputFormat: {
-              useCodeBlock: true,
+              useCodeBlock: false,
               codeBlockSyntax: 'shell'
             }
           }
@@ -922,13 +927,13 @@ ipcMain.handle('execute-shell-ai-command', async (_, prompt) => {
           provider: 'shell',
           shell: {
             command: 'echo',
-            args: ['[DTUI-SHELL]:'],
+            args: [],
             template: '{command} "{args} {prompt}"',
             timeout: 10000,
             streaming: false,
             usePty: true,
             outputFormat: {
-              useCodeBlock: true,
+              useCodeBlock: false,
               codeBlockSyntax: 'shell'
             }
           }
@@ -969,7 +974,13 @@ ipcMain.handle('execute-shell-ai-command', async (_, prompt) => {
     const fullCommand = template
       .replace('{command}', command)
       .replace('{args}', args.join(' '))
-      .replace('{prompt}', prompt.replace(/"/g, '\\"').replace(/\$/g, '\\$'));
+      .replace('{prompt}', prompt
+        .replace(/\\/g, '\\\\')
+        .replace(/"/g, '\\"')
+        .replace(/\$/g, '\\$')
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r')
+      );
     
     console.log('Full command:', fullCommand);
     
