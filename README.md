@@ -51,16 +51,46 @@ A powerful desktop application that replicates the Claude Code CLI experience us
 
 ## 📦 Installation
 
-### Prerequisites
+### 🎯 Quick Start with Singularity (HPC 환경 권장)
+
+1. **Singularity 이미지 다운로드:**
+```bash
+wget https://github.com/kwonah0/dtui2-react/releases/latest/download/dtui2-latest.sif
+```
+
+2. **바로 실행:**
+```bash
+# Headless 모드
+singularity run dtui2-latest.sif headless
+
+# 설정 디렉토리와 함께 실행
+mkdir -p config logs
+singularity run --bind config:/app/data --bind logs:/app/logs dtui2-latest.sif headless
+```
+
+### 🐳 Docker로 실행
+
+```bash
+# 이미지 다운로드 및 실행
+docker pull ghcr.io/kwonah0/dtui2-react:latest
+docker run -it ghcr.io/kwonah0/dtui2-react:latest
+
+# 설정 및 로그 디렉토리 바인드
+docker run -it -v $(pwd)/config:/app/data -v $(pwd)/logs:/app/logs ghcr.io/kwonah0/dtui2-react:latest
+```
+
+### 💻 로컬 개발 설치
+
+#### Prerequisites
 
 - Node.js 16+ and npm
 - An OpenAI API key or Anthropic API key
 
-### Setup
+#### Setup
 
 1. **Clone and install dependencies:**
 ```bash
-git clone <repository-url>
+git clone https://github.com/kwonah0/dtui2-react.git
 cd dtui2-react
 npm install
 ```
@@ -249,7 +279,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
 ## 🚀 Deployment
 
-### Building Executables
+### 📋 사용자를 위한 배포 파일들
+
+사용자가 가져다 쓸 수 있도록 다음 파일들이 자동으로 배포됩니다:
+
+#### 🎯 Singularity 이미지 (HPC 환경용)
+- **파일**: `dtui2-latest.sif` 또는 `dtui2-v1.2.1.sif`
+- **다운로드**: [GitHub Releases](https://github.com/kwonah0/dtui2-react/releases/latest)
+- **사용법**: `singularity run dtui2-latest.sif headless`
+
+#### 🐳 Docker 이미지
+- **레지스트리**: `ghcr.io/kwonah0/dtui2-react:latest`
+- **사용법**: `docker pull ghcr.io/kwonah0/dtui2-react:latest`
+- **자동 빌드**: GitHub Actions로 태그 시 자동 빌드/배포
+
+#### 📖 사용 가이드
+- [Container Deployment Guide](./docs/CONTAINER-DEPLOYMENT.md) - 상세한 컨테이너 사용법
+- [HPC Deployment Guide](./docs/HPC-DEPLOYMENT.md) - HPC 환경 배포 가이드
+
+### Building Executables (개발자용)
 
 The app uses electron-builder for packaging:
 

@@ -1,0 +1,101 @@
+Bootstrap: docker
+From: node:18-alpine
+
+%files
+    . /app
+
+%post
+    # Install system dependencies
+    apk update
+    apk add --no-cache \
+        bash \
+        curl \
+        git \
+        python3 \
+        make \
+        g++ \
+        linux-headers \
+        xvfb \
+        dbus \
+        gtk+3.0 \
+        libxss \
+        gconf \
+        libnss \
+        libasound \
+        ca-certificates
+
+    # Set working directory
+    cd /app
+
+    # Install Node.js dependencies
+    npm ci --only=production
+
+    # Build the application
+    npm run build:electron
+
+    # Create necessary directories
+    mkdir -p /app/data /app/logs /app/config
+
+    # Set proper permissions
+    chmod -R 755 /app
+    chmod +x /app/node_modules/.bin/*
+
+%environment
+    export NODE_ENV=production
+    export DTUI_CONFIG_DIR=/app/data
+    export DTUI_LOG_DIR=/app/logs
+    export PATH=/app/node_modules/.bin:$PATH
+    export ELECTRON_DISABLE_SANDBOX=true
+
+%runscript
+    cd /app
+    if [ "$1" = "headless" ]; then
+        exec npm run electron:headless
+    elif [ "$1" = "gui" ]; then
+        exec npm run electron
+    elif [ "$1" = "shell" ]; then
+        exec /bin/bash
+    else
+        exec npm run electron:headless
+    fi
+
+%startscript
+    cd /app
+    npm run electron:headless &
+
+%test
+    cd /app
+    node -e "console.log('DTUI2 Singularity container test passed')"
+    npm --version
+    node --version
+
+%help
+    DTUI2 - Claude Code Style AI Terminal
+
+    Usage:
+        singularity run dtui2.sif [headless|gui|shell]
+        singularity exec dtui2.sif npm run electron:headless
+
+    Options:
+        headless    Run in headless mode (default)
+        gui         Run with GUI (requires X11 forwarding)
+        shell       Start interactive shell
+
+    Environment Variables:
+        DTUI_CONFIG_DIR    Configuration directory (default: /app/data)
+        DTUI_LOG_DIR       Log directory (default: /app/logs)
+
+    Examples:
+        # Run in headless mode
+        singularity run dtui2.sif headless
+
+        # Run with GUI
+        singularity run --bind /tmp/.X11-unix:/tmp/.X11-unix dtui2.sif gui
+
+        # Interactive shell
+        singularity run dtui2.sif shell
+
+%labels
+    Author kwonah0
+    Version v1.2.1
+    Description DTUI2 - Claude Code Style AI Terminal for HPC environments
