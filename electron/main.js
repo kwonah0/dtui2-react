@@ -3,9 +3,20 @@ const path = require('path');
 const fs = require('fs').promises;
 const { spawn } = require('child_process');
 
-// PTY emulation using script command on Unix systems
-const usePtyEmulation = process.platform !== 'win32' && require('fs').existsSync('/usr/bin/script');
-console.log('PTY emulation available:', usePtyEmulation);
+// Try to use real PTY if available, fallback to script command
+let pty;
+let usePtyEmulation = false;
+let useNodePty = false;
+
+try {
+  pty = require('@homebridge/node-pty-prebuilt-multiarch');
+  useNodePty = true;
+  console.log('✅ node-pty loaded successfully');
+} catch (err) {
+  console.log('⚠️ node-pty not available, falling back to script command:', err.message);
+  usePtyEmulation = process.platform !== 'win32' && require('fs').existsSync('/usr/bin/script');
+  console.log('PTY emulation available:', usePtyEmulation);
+}
 
 let mainWindow;
 let shellSession = null;
@@ -32,14 +43,19 @@ const createWindow = () => {
   });
 
   const isDev = process.env.NODE_ENV === 'development';
+  const isTest = process.env.NODE_ENV === 'test';
   
   if (isDev) {
     mainWindow.loadURL('http://localhost:3002');
-    mainWindow.webContents.openDevTools();
+    if (!isTest) {
+      mainWindow.webContents.openDevTools();
+    }
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-    // Open DevTools in production for debugging
-    mainWindow.webContents.openDevTools();
+    // Only open DevTools in production if not testing
+    if (!isTest) {
+      mainWindow.webContents.openDevTools();
+    }
   }
 
   mainWindow.once('ready-to-show', () => {
@@ -83,56 +99,95 @@ const createWindow = () => {
 // Terminal session management
 const createShellSession = () => {
   if (shellSession) {
-    shellSession.kill();
+    if (useNodePty && shellSession.kill) {
+      shellSession.kill();
+    } else if (shellSession.kill) {
+      shellSession.kill();
+    }
   }
 
   const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/bash';
   const shellArgs = process.platform === 'win32' ? [] : ['--login'];
   
-  // Use regular spawn (no native PTY available)
-  shellSession = spawn(shell, shellArgs, {
-    cwd: currentWorkingDirectory,
-    env: {
-      ...process.env,
-      TERM: 'xterm-color',
-      COLORTERM: 'truecolor',
-      CLICOLOR: '1',
-      CLICOLOR_FORCE: '1',
-      COLUMNS: '80',
-      LINES: '24',
-      GREP_OPTIONS: '--color=always',
-      LS_COLORS: 'di=1;34:ln=1;35:so=32:pi=33:ex=1;32:bd=46;34:cd=43;34:su=41;30:sg=46;30:tw=42;30:ow=43;30'
-    },
-    stdio: ['pipe', 'pipe', 'pipe']
-  });
+  if (useNodePty) {
+    // Use real PTY with node-pty
+    shellSession = pty.spawn(shell, shellArgs, {
+      name: 'xterm-256color',
+      cols: 80,
+      rows: 30,
+      cwd: currentWorkingDirectory,
+      env: {
+        ...process.env,
+        TERM: 'xterm-256color',
+        COLORTERM: 'truecolor'
+      }
+    });
 
-  shellSession.stdout.on('data', (data) => {
-    if (mainWindow) {
-      mainWindow.webContents.send('shell-output', {
-        type: 'stdout',
-        data: data.toString()
-      });
-    }
-  });
+    shellSession.onData((data) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('shell-output', {
+          type: 'stdout',
+          data: data,
+          isPty: true
+        });
+      }
+    });
 
-  shellSession.stderr.on('data', (data) => {
-    if (mainWindow) {
-      mainWindow.webContents.send('shell-output', {
-        type: 'stderr',
-        data: data.toString()
-      });
-    }
-  });
+    shellSession.onExit(({ exitCode }) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('shell-output', {
+          type: 'close',
+          code: exitCode
+        });
+      }
+      shellSession = null;
+    });
+  } else {
+    // Fallback to regular spawn
+    shellSession = spawn(shell, shellArgs, {
+      cwd: currentWorkingDirectory,
+      env: {
+        ...process.env,
+        TERM: 'xterm-color',
+        COLORTERM: 'truecolor',
+        CLICOLOR: '1',
+        CLICOLOR_FORCE: '1',
+        COLUMNS: '80',
+        LINES: '24',
+        GREP_OPTIONS: '--color=always',
+        LS_COLORS: 'di=1;34:ln=1;35:so=32:pi=33:ex=1;32:bd=46;34:cd=43;34:su=41;30:sg=46;30:tw=42;30:ow=43;30'
+      },
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
 
-  shellSession.on('close', (code) => {
-    if (mainWindow) {
-      mainWindow.webContents.send('shell-output', {
-        type: 'close',
-        code: code
-      });
-    }
-    shellSession = null;
-  });
+    shellSession.stdout.on('data', (data) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('shell-output', {
+          type: 'stdout',
+          data: data.toString()
+        });
+      }
+    });
+
+    shellSession.stderr.on('data', (data) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('shell-output', {
+          type: 'stderr',
+          data: data.toString()
+        });
+      }
+    });
+
+    shellSession.on('close', (code) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('shell-output', {
+          type: 'close',
+          code: code
+        });
+      }
+      shellSession = null;
+    });
+  }
 
   return shellSession;
 };
@@ -152,6 +207,16 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
+});
+
+// Add PTY resize handler
+ipcMain.handle('resize-pty', async (_, cols, rows) => {
+  if (useNodePty && shellSession && shellSession.resize) {
+    shellSession.resize(cols, rows);
+    console.log(`PTY resized to ${cols}x${rows}`);
+    return { success: true };
+  }
+  return { success: false, message: 'PTY resize not supported' };
 });
 
 // IPC handlers for file operations
@@ -222,11 +287,62 @@ ipcMain.handle('execute-command', async (_, command, options = {}) => {
 // New handler for persistent shell commands
 ipcMain.handle('execute-shell-command', async (_, command) => {
   console.log('🚀🚀🚀 EXECUTE-SHELL-COMMAND CALLED WITH:', command);
+  console.log('🚀🚀🚀 NODE-PTY AVAILABLE:', useNodePty);
   console.log('🚀🚀🚀 PTY EMULATION AVAILABLE:', usePtyEmulation);
   
   return new Promise((resolve) => {
+    // Use node-pty if available
+    if (useNodePty) {
+      console.log('Using node-pty for real PTY');
+      const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/bash';
+      const ptyProcess = pty.spawn(shell, ['-c', command], {
+        name: 'xterm-256color',
+        cols: 80,
+        rows: 30,
+        cwd: currentWorkingDirectory,
+        env: {
+          ...process.env,
+          TERM: 'xterm-256color',
+          COLORTERM: 'truecolor'
+        }
+      });
+      
+      let output = '';
+      
+      ptyProcess.onData((data) => {
+        output += data;
+        
+        // Send real-time output to frontend
+        if (mainWindow) {
+          mainWindow.webContents.send('shell-output', {
+            type: 'stdout',
+            data: data,
+            isPty: true
+          });
+        }
+      });
+      
+      ptyProcess.onExit(({ exitCode }) => {
+        console.log('node-pty command completed with code:', exitCode);
+        
+        if (mainWindow) {
+          mainWindow.webContents.send('shell-output', {
+            type: 'close',
+            code: exitCode,
+            isPty: true
+          });
+        }
+        
+        resolve({
+          success: exitCode === 0,
+          message: 'PTY command executed',
+          exitCode: exitCode,
+          output: output.trim()
+        });
+      });
+    }
     // Use script command for PTY emulation if available
-    if (usePtyEmulation) {
+    else if (usePtyEmulation) {
       console.log('Using script command for PTY emulation');
       const scriptCommand = `script -qc "${command.replace(/"/g, '\\"')}" /dev/null`;
       const testProcess = spawn(scriptCommand, [], { 
@@ -331,107 +447,116 @@ ipcMain.handle('execute-shell-command', async (_, command) => {
   });
 });
 
-// Execute command with collected output using persistent session
+// Execute command with collected output - simplified approach for node-pty
 ipcMain.handle('execute-command-with-output', async (_, command) => {
+  console.log('🔥 execute-command-with-output called with:', command);
+  
   return new Promise((resolve) => {
-    if (!shellSession) {
-      createShellSession();
-      // Wait for shell to initialize
-      setTimeout(() => executeCommand(), 500);
-    } else {
-      executeCommand();
-    }
-
-    function executeCommand() {
-      if (!shellSession) {
-        resolve({
-          success: false,
-          stdout: '',
-          stderr: 'Failed to create shell session',
-          exitCode: -1
-        });
-        return;
-      }
-
-      let outputBuffer = '';
-      let errorBuffer = '';
-      const commandId = Date.now() + Math.random();
-      const startMarker = `__DTUI2_START_${commandId}__`;
-      const endMarker = `__DTUI2_END_${commandId}__`;
-      let commandStarted = false;
-      let commandCompleted = false;
-
-      // Data listeners
-      const stdoutListener = (data) => {
-        const output = data.toString();
-        outputBuffer += output;
-
-        // Check for start marker
-        if (!commandStarted && output.includes(startMarker)) {
-          commandStarted = true;
-          outputBuffer = outputBuffer.split(startMarker)[1] || '';
+    if (useNodePty) {
+      // Use one-time PTY process for clean output capture
+      console.log('Using node-pty for command execution');
+      
+      const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/bash';
+      const cmdProcess = pty.spawn(shell, ['-c', command], {
+        name: 'xterm-256color',
+        cols: 80,
+        rows: 30,
+        cwd: currentWorkingDirectory,
+        env: {
+          ...process.env,
+          TERM: 'xterm-256color',
+          COLORTERM: 'truecolor'
         }
+      });
 
-        // Check for end marker
-        if (commandStarted && output.includes(endMarker)) {
-          commandCompleted = true;
-          outputBuffer = outputBuffer.split(endMarker)[0] || '';
-          cleanup();
-        }
-      };
+      let output = '';
+      let hasOutput = false;
 
-      const stderrListener = (data) => {
-        errorBuffer += data.toString();
-      };
+      cmdProcess.onData((data) => {
+        output += data;
+        hasOutput = true;
+        console.log('PTY output chunk:', JSON.stringify(data.substring(0, 100)));
+      });
 
-      const cleanup = () => {
-        shellSession.stdout.removeListener('data', stdoutListener);
-        shellSession.stderr.removeListener('data', stderrListener);
+      cmdProcess.onExit(({ exitCode }) => {
+        console.log('PTY command completed with exit code:', exitCode);
+        console.log('Total output length:', output.length);
+        console.log('Has output:', hasOutput);
         
-        // Extract exit code from output
-        let actualExitCode = 0;
-        let cleanOutput = outputBuffer
+        // Clean up common terminal escape sequences while preserving colors
+        let cleanOutput = output
           .replace(/\r\n/g, '\n')
           .replace(/\r/g, '\n')
-          .replace(/\x1b\[[0-9;]*[JKH]/g, ''); // Remove cursor control sequences
+          .replace(/\x1b\[?2004[hl]/g, '') // Remove bracketed paste mode
+          .replace(/\x1b\]0;[^\x07]*\x07/g, '') // Remove window title sequences
+          .trim();
         
-        // Look for exit code marker
-        const exitCodeMatch = cleanOutput.match(/__EXIT_CODE__(\d+)/);
-        if (exitCodeMatch) {
-          actualExitCode = parseInt(exitCodeMatch[1]);
-          // Remove exit code line from output
-          cleanOutput = cleanOutput.replace(/__EXIT_CODE__\d+\n?/, '');
-        }
+        console.log('Clean output preview:', JSON.stringify(cleanOutput.substring(0, 200)));
         
-        cleanOutput = cleanOutput.trim();
-
         resolve({
-          success: actualExitCode === 0,
+          success: exitCode === 0,
           stdout: cleanOutput,
-          stderr: errorBuffer,
-          exitCode: actualExitCode
+          stderr: '',
+          exitCode: exitCode,
+          isPty: true
         });
-      };
-
-      // Set up listeners
-      shellSession.stdout.on('data', stdoutListener);
-      shellSession.stderr.on('data', stderrListener);
-
-      // Send command with markers and capture exit code
-      const wrappedCommand = `echo "${startMarker}"; ${command}; echo "__EXIT_CODE__$?"; echo "${endMarker}"`;
-      shellSession.stdin.write(wrappedCommand + '\n');
+      });
 
       // Timeout handling
       setTimeout(() => {
-        if (!commandCompleted) {
-          cleanup();
-          resolve({
-            success: false,
-            stdout: outputBuffer,
-            stderr: 'Command timed out',
-            exitCode: -1
-          });
+        console.log('Command timed out');
+        cmdProcess.kill();
+        resolve({
+          success: false,
+          stdout: output || '',
+          stderr: 'Command timed out after 10 seconds',
+          exitCode: -1
+        });
+      }, 10000);
+      
+    } else {
+      // Fallback to regular child_process approach
+      console.log('Using child_process for command execution');
+      
+      const childProcess = spawn(command, [], {
+        shell: true,
+        cwd: currentWorkingDirectory,
+        env: {
+          ...process.env,
+          TERM: 'xterm-256color',
+          COLORTERM: 'truecolor'
         }
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      childProcess.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      childProcess.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      childProcess.on('close', (exitCode) => {
+        resolve({
+          success: exitCode === 0,
+          stdout: stdout.trim(),
+          stderr: stderr.trim(),
+          exitCode: exitCode
+        });
+      });
+
+      // Timeout handling
+      setTimeout(() => {
+        childProcess.kill();
+        resolve({
+          success: false,
+          stdout: stdout || '',
+          stderr: stderr || 'Command timed out',
+          exitCode: -1
+        });
       }, 10000);
     }
   });

@@ -22,6 +22,7 @@
     "test:hpc": "DTUI_USER_CONFIGFILE=dtui-hpc.json npm run test:gui",
     "setup:hpc": "bash scripts/hpc-setup.sh",
     "setup:wsl": "bash scripts/setup-wsl.sh",
+    "postinstall": "npx electron-rebuild -f -w @homebridge/node-pty-prebuilt-multiarch || echo 'Rebuild failed, using fallback'",
     "dist": "npm run build && electron-builder",
     "dist:win": "npm run build && electron-builder --win",
     "dist:mac": "npm run build && electron-builder --mac",
@@ -44,6 +45,7 @@
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.8",
     "@types/react-syntax-highlighter": "^15.5.13",
+    "@types/xterm": "^2.0.3",
     "@vitejs/plugin-react": "^5.0.2",
     "concurrently": "^9.2.1",
     "cross-env": "^10.0.0",
@@ -57,6 +59,7 @@
     "@anthropic-ai/sdk": "^0.60.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
+    "@homebridge/node-pty-prebuilt-multiarch": "^0.13.1",
     "ansi-to-html": "^0.7.2",
     "axios": "^1.11.0",
     "electron": "^37.4.0",
@@ -66,7 +69,10 @@
     "react-dom": "^19.1.1",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^15.6.6",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0",
+    "xterm-addon-web-links": "^0.9.0"
   },
   "build": {
     "appId": "com.dtui2.app",
