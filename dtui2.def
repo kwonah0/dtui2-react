@@ -1,44 +1,47 @@
 Bootstrap: docker
-From: node:18-alpine
+From: node:18-bullseye
 
 %files
     . /app
 
 %post
     # Install system dependencies
-    apk update
-    apk add --no-cache \
-        bash \
-        curl \
-        git \
+    apt-get update
+    apt-get install -y \
+        libgtk-3-0 \
+        libgbm-dev \
+        libnotify-dev \
+        libgconf-2-4 \
+        libnss3 \
+        libxss1 \
+        libasound2 \
+        libxtst6 \
+        xauth \
+        xvfb \
         python3 \
         make \
         g++ \
-        linux-headers \
-        xvfb \
-        dbus \
-        gtk+3.0 \
-        libxss \
-        gconf \
-        libnss \
-        libasound \
+        git \
+        bash \
+        curl \
         ca-certificates
+    
+    rm -rf /var/lib/apt/lists/*
 
     # Set working directory
     cd /app
 
     # Install Node.js dependencies
-    npm ci --only=production
+    npm ci
 
     # Build the application
-    npm run build:electron
+    npm run build
 
     # Create necessary directories
     mkdir -p /app/data /app/logs /app/config
 
     # Set proper permissions
     chmod -R 755 /app
-    chmod +x /app/node_modules/.bin/*
 
 %environment
     export NODE_ENV=production
@@ -46,22 +49,23 @@ From: node:18-alpine
     export DTUI_LOG_DIR=/app/logs
     export PATH=/app/node_modules/.bin:$PATH
     export ELECTRON_DISABLE_SANDBOX=true
+    export DISPLAY=:99
 
 %runscript
     cd /app
     if [ "$1" = "headless" ]; then
-        exec npm run electron:headless
+        exec xvfb-run -a npm run electron
     elif [ "$1" = "gui" ]; then
         exec npm run electron
     elif [ "$1" = "shell" ]; then
         exec /bin/bash
     else
-        exec npm run electron:headless
+        exec xvfb-run -a npm run electron
     fi
 
 %startscript
     cd /app
-    npm run electron:headless &
+    xvfb-run -a npm run electron &
 
 %test
     cd /app
@@ -74,7 +78,6 @@ From: node:18-alpine
 
     Usage:
         singularity run dtui2.sif [headless|gui|shell]
-        singularity exec dtui2.sif npm run electron:headless
 
     Options:
         headless    Run in headless mode (default)
@@ -97,5 +100,5 @@ From: node:18-alpine
 
 %labels
     Author kwonah0
-    Version v1.2.1
+    Version v1.3.0
     Description DTUI2 - Claude Code Style AI Terminal for HPC environments

@@ -8,7 +8,7 @@
       "timeout": 5000,
       "streaming": false,
       "outputFormat": {
-        "useCodeBlock": true,
+        "useCodeBlock": false,
         "codeBlockSyntax": "shell"
       }
     }

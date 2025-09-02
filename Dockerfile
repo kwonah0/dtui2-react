@@ -1,8 +1,25 @@
-# Multi-stage build for DTUI2 React application
-FROM node:18-alpine as builder
+# DTUI2 React Docker Image
+FROM node:18-bullseye
 
-# Install Python and build tools needed for native modules
-RUN apk add --no-cache python3 make g++ linux-headers
+# Install system dependencies for Electron and node-pty
+RUN apt-get update && apt-get install -y \
+    libgtk-3-0 \
+    libgbm-dev \
+    libnotify-dev \
+    libgconf-2-4 \
+    libnss3 \
+    libxss1 \
+    libasound2 \
+    libxtst6 \
+    xauth \
+    xvfb \
+    python3 \
+    make \
+    g++ \
+    git \
+    bash \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
@@ -11,63 +28,26 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production
+RUN npm ci
 
 # Copy source code
 COPY . .
 
 # Build the application
-RUN npm run build:electron
-
-# Production stage
-FROM node:18-alpine
-
-# Install required system dependencies
-RUN apk add --no-cache \
-    bash \
-    curl \
-    git \
-    python3 \
-    make \
-    g++ \
-    linux-headers \
-    xvfb \
-    dbus \
-    gtk+3.0 \
-    libxss \
-    gconf \
-    libnss \
-    libasound
-
-# Create app user
-RUN addgroup -g 1001 -S dtui && \
-    adduser -S dtui -u 1001 -G dtui
-
-# Set working directory
-WORKDIR /app
-
-# Copy built application from builder stage
-COPY --from=builder --chown=dtui:dtui /app .
+RUN npm run build
 
 # Create necessary directories
-RUN mkdir -p /app/data /app/logs && \
-    chown -R dtui:dtui /app
-
-# Switch to non-root user
-USER dtui
+RUN mkdir -p /app/data /app/logs
 
 # Set environment variables
 ENV NODE_ENV=production
 ENV DISPLAY=:99
 ENV DTUI_CONFIG_DIR=/app/data
 ENV DTUI_LOG_DIR=/app/logs
+ENV ELECTRON_DISABLE_SANDBOX=true
 
 # Expose port (if needed for web interface)
 EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD node -e "console.log('DTUI2 container is healthy')" || exit 1
-
-# Default command - run in headless mode
-CMD ["npm", "run", "electron:headless"]
+# Default command - run in headless mode with xvfb
+CMD ["xvfb-run", "-a", "npm", "run", "electron"]
