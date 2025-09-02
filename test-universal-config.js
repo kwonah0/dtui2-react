@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Test UniversalConfigService and BrowserShellAIAgent functionality
+ * Test UniversalConfigService and ElectronShellAIAgent functionality
  */
 
 console.log('🧪 Testing Universal Configuration System...\n');
@@ -10,9 +10,9 @@ console.log('🧪 Testing Universal Configuration System...\n');
 const testScenarios = [
   {
     name: 'Default configuration loading',
-    description: 'Should load enhanced default config for browser',
+    description: 'Should load enhanced default config for Electron',
     test: () => {
-      // This would be tested in the browser environment
+      // This would be tested in the Electron environment
       return true;
     }
   },
@@ -27,11 +27,11 @@ const testScenarios = [
   },
   {
     name: 'Environment detection',
-    description: 'Should detect browser vs Electron environment correctly'
+    description: 'Should detect Electron environment correctly'
   },
   {
     name: 'Agent factory selection',
-    description: 'Should select BrowserShellAIAgent in browser environment'
+    description: 'Should select ElectronShellAIAgent in Electron environment'
   }
 ];
 
@@ -50,9 +50,9 @@ testScenarios.forEach((scenario, index) => {
 
 console.log('🔧 To test the actual functionality:');
 console.log('1. Open the Electron app (npm run electron:dev)');
-console.log('2. Open browser DevTools and check console for:');
-console.log('   - "UniversalConfigService initialized for: Browser"');
-console.log('   - "AIProvider initialized with agent: Browser Shell AI Agent"');
+console.log('2. Open DevTools and check console for:');
+console.log('   - "UniversalConfigService initialized for: Electron"');
+console.log('   - "AIProvider initialized with agent: Electron Shell AI Agent"');
 console.log('   - Environment info with current config');
 console.log('');
 
@@ -64,7 +64,7 @@ console.log('   - "generate code React component" - Should use configured templa
 console.log('');
 
 console.log('📝 Expected behavior:');
-console.log('✅ Browser environment should use BrowserShellAIAgent');
+console.log('✅ Electron environment should use ElectronShellAIAgent');
 console.log('✅ Default config should enable shell provider with echo command');
 console.log('✅ Commands should be processed using configured template');
 console.log('✅ Response should include configuration metadata');
@@ -72,12 +72,12 @@ console.log('✅ Console should show agent initialization and environment detect
 console.log('');
 
 console.log('🚀 Advanced test: Change configuration');
-console.log('1. Open DevTools > Application > Local Storage');
-console.log('2. Add key: "dtui-config"');
-console.log('3. Set value: {"ai":{"provider":"shell","shell":{"command":"custom","args":["TEST:"],"template":"{command} {args} \\"{prompt}\\""}}}"');
-console.log('4. Refresh page and test again');
+console.log('1. Set environment variable: DTUI_CFG__ai__shell__command=printf');
+console.log('2. Set environment variable: DTUI_CFG__ai__shell__args=["CUSTOM:"]');
+console.log('3. Or create DTUI_USER_CONFIGFILE with custom settings');
+console.log('4. Restart the app and test again');
 console.log('');
 
-console.log('Expected result: Responses should now use "custom TEST:" prefix instead of "echo [Mock Shell Response]:"');
+console.log('Expected result: Responses should use the configured command and args');
 
 console.log('\n✨ Configuration system is ready for testing!');

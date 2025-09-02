@@ -27,7 +27,6 @@ const colors = {
 // Test configuration paths
 const CONFIG_PATHS = {
   local: path.join(__dirname, '../dtui.json'),
-  appImage: path.join(os.homedir(), '.config', 'DTUI2', 'dtui.json'),
   temp: path.join(os.tmpdir(), 'dtui-test.json')
 };
 
@@ -200,33 +199,46 @@ class ConfigTester {
   }
 
   /**
-   * Test 4: AppImage Configuration Path
-   * Tests if AppImage uses correct config path
+   * Test 4: DTUI_USER_CONFIGFILE Environment Variable
+   * Tests if custom config file path can be set via environment variable
    */
-  async testAppImageConfigPath() {
-    return this.runTest('AppImage Configuration Path', async () => {
-      // Simulate AppImage environment
-      const originalAppImage = process.env.APPIMAGE;
-      process.env.APPIMAGE = '/tmp/test.AppImage';
+  async testCustomConfigFile() {
+    return this.runTest('DTUI_USER_CONFIGFILE Environment Variable', async () => {
+      const customConfigPath = path.join(os.tmpdir(), 'custom-dtui-test.json');
+      const originalConfigFile = process.env.DTUI_USER_CONFIGFILE;
       
-      // Expected path for AppImage
-      const expectedPath = path.join(os.homedir(), '.config', 'DTUI2', 'dtui.json');
+      // Set custom config file path
+      process.env.DTUI_USER_CONFIGFILE = customConfigPath;
       
-      // In real scenario, the app would use app.getPath('userData')
-      // For testing, we verify the path construction
-      const appImagePath = process.env.APPIMAGE ? expectedPath : CONFIG_PATHS.local;
+      // Create test config at custom location
+      const testConfig = {
+        ...DEFAULT_CONFIG,
+        ai: {
+          ...DEFAULT_CONFIG.ai,
+          shell: {
+            ...DEFAULT_CONFIG.ai.shell,
+            args: ['[CUSTOM_CONFIG]:']
+          }
+        }
+      };
       
-      const passed = appImagePath === expectedPath;
+      await fs.writeFile(customConfigPath, JSON.stringify(testConfig, null, 2));
       
-      this.log(`    APPIMAGE env: ${process.env.APPIMAGE}`, 'gray');
-      this.log(`    Expected path: ${expectedPath}`, 'gray');
-      this.log(`    Resolved path: ${appImagePath}`, 'gray');
+      // Verify environment variable is set and file exists
+      const configFileFromEnv = process.env.DTUI_USER_CONFIGFILE;
+      const configExists = await fs.access(customConfigPath).then(() => true).catch(() => false);
       
-      // Restore original
-      if (originalAppImage) {
-        process.env.APPIMAGE = originalAppImage;
+      const passed = configFileFromEnv === customConfigPath && configExists;
+      
+      this.log(`    DTUI_USER_CONFIGFILE: ${configFileFromEnv}`, 'gray');
+      this.log(`    Config file exists: ${configExists}`, 'gray');
+      
+      // Clean up
+      await fs.unlink(customConfigPath).catch(() => {});
+      if (originalConfigFile) {
+        process.env.DTUI_USER_CONFIGFILE = originalConfigFile;
       } else {
-        delete process.env.APPIMAGE;
+        delete process.env.DTUI_USER_CONFIGFILE;
       }
       
       return passed;
@@ -365,7 +377,7 @@ class ConfigTester {
     await this.testEnvironmentVariables();
     await this.testUserConfigFile();
     await this.testDefaultConfigFallback();
-    await this.testAppImageConfigPath();
+    await this.testCustomConfigFile();
     await this.testConfigPriority();
     await this.testCodeBlockConfig();
     await this.testShellCommandTemplate();

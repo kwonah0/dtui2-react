@@ -1,0 +1,34 @@
+{
+  "ai": {
+    "provider": "shell",
+    "shell": {
+      "command": "bash",
+      "args": ["-c", "echo '[HPC-SHELL]:'; cat"],
+      "template": "{command} {args} <<< \"{prompt}\"",
+      "timeout": 10000,
+      "streaming": false,
+      "outputFormat": {
+        "useCodeBlock": true,
+        "codeBlockSyntax": "shell"
+      }
+    }
+  },
+  "terminal": {
+    "shell": "/bin/bash",
+    "columns": 80,
+    "lines": 24
+  },
+  "ui": {
+    "theme": "dark",
+    "fontSize": 14
+  },
+  "hpc": {
+    "disableGpu": true,
+    "disableShm": true,
+    "disableDevShmUsage": true,
+    "noSandbox": true,
+    "disableSetuidSandbox": true,
+    "singleProcess": false,
+    "disableFeatures": "VizDisplayCompositor,WebRtc,WebBluetooth"
+  }
+}

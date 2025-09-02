@@ -76,19 +76,41 @@ DTUI2는 AI 기반 터미널 인터페이스를 제공하는 Electron 기반의 
 ### GUI 테스트 (Playwright)
 다음 시나리오들에 대한 자동화된 테스트:
 
+#### 테스트 환경 도구
+- **Xvfb (Virtual X11)**: WSL2 환경에서 headless GUI 테스트 지원
+- **Playwright Electron**: Electron 앱 자동화 및 UI 테스트
+- **스크린샷 캡처**: 시각적 검증을 위한 자동 스크린샷
+- **DISPLAY 환경변수**: `:99` 가상 디스플레이 사용
+
+#### 테스트 시나리오
 1. **출력 형식 테스트**:
    - `useCodeBlock: true, codeBlockSyntax: 'shell'`
    - `useCodeBlock: true, codeBlockSyntax: 'bash'`
    - `useCodeBlock: false`
 
-2. **마크다운 문법 검증**:
+2. **PTY 터미널 출력 테스트**:
+   - ANSI 컬러 코드 HTML 변환 검증
+   - 멀티컬럼 파일 목록 (`!ls`) 형식 확인
+   - 터미널 에뮬레이션 (`script` 명령어) 검증
+
+3. **마크다운 문법 검증**:
    - 잘못된 마크다운 문법 반환 방지
    - 코드 블록 형식 정확성 검증
 
-3. **셸 명령어 테스트**:
+4. **셸 명령어 테스트**:
    - 성공적인 명령어 실행
    - 실패한 명령어의 에러 표시
    - 세션 유지 확인
+
+#### 테스트 실행 환경
+```bash
+# Xvfb 실행
+export DISPLAY=:99
+Xvfb :99 -screen 0 1024x768x24 -ac &
+
+# Playwright 테스트 실행
+DISPLAY=:99 npx playwright test
+```
 
 ### 설정 테스트
 - 환경 변수 우선순위 테스트
@@ -113,6 +135,14 @@ DTUI2는 AI 기반 터미널 인터페이스를 제공하는 Electron 기반의 
 
 ### 인터페이스 요구사항
 - 직관적인 채팅 인터페이스
+- **멀티라인 입력 지원**: 
+  - `Shift+Enter`로 줄바꿈 입력 가능
+  - 자동 높이 조절 (최대 200px)
+  - Enter: 메시지 전송, Shift+Enter: 새 줄 추가
+- **쉘 에이전트 멀티라인 처리**:
+  - 입력된 줄바꿈 문자 보존
+  - 특수문자 이스케이핑 (`"` → `\"`, `$` → `\$`)
+  - template 시스템으로 안전한 명령어 구성
 - 명령어 결과의 명확한 구분 표시
 - 에러 상황에서의 적절한 피드백
 

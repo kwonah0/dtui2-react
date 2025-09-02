@@ -72,7 +72,7 @@ function Header({ onNewChat, onClearChat }: HeaderProps) {
         <HeaderButton onClick={onNewChat} title="New Chat (Ctrl+N)">
           New
         </HeaderButton>
-        <HeaderButton onClick={onClearChat} title="Clear Chat (Ctrl+Shift+C)">
+        <HeaderButton onClick={onClearChat} title="Clear Chat (Ctrl+Shift+C)" data-testid="clear-button">
           Clear
         </HeaderButton>
       </ButtonGroup>

@@ -9,7 +9,7 @@ import { DtuiConfig, DEFAULT_CONFIG } from './types';
  * Priority order (highest to lowest):
  * 1. Command-line arguments
  * 2. Environment variables (DTUI_CFG__* prefix with __ separator)
- * 3. Config file (DTUI_CONFIG_FILE env var or dtui.json)
+ * 3. Config file (DTUI_USER_CONFIGFILE env var or built-in dtui.json)
  * 4. Default values
  */
 export class ConfigService {
@@ -30,10 +30,10 @@ export class ConfigService {
   }
   
   private getConfigFilePath(): string {
-    // Check for config file path in env var
-    const envPath = process.env.DTUI_CONFIG_FILE;
+    // Check for config file path in env var - correct variable name
+    const envPath = process.env.DTUI_USER_CONFIGFILE;
     if (envPath && fs.existsSync(envPath)) {
-      console.log(`Using config file from DTUI_CONFIG_FILE: ${envPath}`);
+      console.log(`Using config file from DTUI_USER_CONFIGFILE: ${envPath}`);
       return envPath;
     }
     
@@ -44,18 +44,20 @@ export class ConfigService {
       return localPath;
     }
     
-    // Check for dtui.json in home directory
-    const homePath = path.join(process.env.HOME || process.env.USERPROFILE || '', '.dtui.json');
-    if (fs.existsSync(homePath)) {
-      console.log(`Using config file: ${homePath}`);
-      return homePath;
-    }
-    
-    // Check for dtui.json in the app directory
+    // Check for built-in dtui.json in the app directory
     const appPath = path.join(__dirname, '../../dtui.json');
     if (fs.existsSync(appPath)) {
-      console.log(`Using config file: ${appPath}`);
+      console.log(`Using built-in config file: ${appPath}`);
       return appPath;
+    }
+    
+    // For AppImage - check if bundled config exists
+    if (process.env.APPIMAGE) {
+      const bundledPath = path.join(path.dirname(process.execPath), 'dtui.json');
+      if (fs.existsSync(bundledPath)) {
+        console.log(`Using bundled AppImage config: ${bundledPath}`);
+        return bundledPath;
+      }
     }
     
     console.log('No config file found, using defaults only');

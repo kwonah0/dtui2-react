@@ -104,8 +104,17 @@ function App() {
       
       let assistantMessage: Message;
       
-      // Check if response is terminal output
-      if (response.startsWith('__TERMINAL_OUTPUT__')) {
+      // Check if response is PTY output
+      if (response.startsWith('__PTY_OUTPUT__')) {
+        const ptyData = JSON.parse(response.slice('__PTY_OUTPUT__'.length));
+        assistantMessage = {
+          id: (Date.now() + 1).toString(),
+          role: MessageRole.ASSISTANT,
+          content: ptyData.content,
+          timestamp: new Date(),
+          isPty: true,
+        };
+      } else if (response.startsWith('__TERMINAL_OUTPUT__')) {
         const terminalData = JSON.parse(response.slice('__TERMINAL_OUTPUT__'.length));
         assistantMessage = {
           id: (Date.now() + 1).toString(),

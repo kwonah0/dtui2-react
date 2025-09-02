@@ -1,0 +1,13 @@
+{
+  "ai": {
+    "provider": "shell",
+    "shell": {
+      "command": "echo",
+      "args": ["[USER_CONFIG]:"],
+      "timeout": 15000,
+      "outputFormat": {
+        "useCodeBlock": false
+      }
+    }
+  }
+}

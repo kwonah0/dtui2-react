@@ -11,6 +11,7 @@ export interface Message {
   timestamp: Date;
   isTerminalOutput?: boolean;
   terminalCommand?: string;
+  isPty?: boolean;
 }
 
 export interface ElectronAPI {

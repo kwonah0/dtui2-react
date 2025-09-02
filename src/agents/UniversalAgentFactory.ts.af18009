@@ -4,7 +4,7 @@
 
 import { AIAgent } from '../services/MockAIAgent';
 import { MockAIAgent } from '../services/MockAIAgent';
-// import { BrowserShellAIAgent } from './BrowserShellAIAgent'; // Removed
+import { BrowserShellAIAgent } from './BrowserShellAIAgent';
 import { ElectronShellAIAgent } from './ElectronShellAIAgent';
 import { universalConfigService } from '../config/UniversalConfigService';
 
@@ -82,8 +82,8 @@ export class UniversalAgentFactory {
       console.log('✅ Using Electron IPC Shell AI Agent');
       return new ElectronShellAIAgent();
     } else {
-      console.log('🌐 Browser environment - falling back to Mock AI Agent');
-      return new MockAIAgent();
+      console.log('🌐 Using Browser Shell AI Agent (Browser simulation)');
+      return new BrowserShellAIAgent();
     }
   }
   

@@ -29,6 +29,11 @@ export interface ShellAIConfig {
   env?: Record<string, string>; // additional environment variables
   workingDirectory?: string; // cwd for command execution
   streaming?: boolean;       // whether to stream output
+  outputFormat?: {           // output formatting options
+    useCodeBlock?: boolean;
+    codeBlockSyntax?: string;
+  };
+  usePty?: boolean;          // use pseudo-terminal for proper formatting
 }
 
 export interface APIAIConfig {

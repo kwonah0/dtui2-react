@@ -5,6 +5,32 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Message, MessageRole } from '../types';
 import { TerminalOutput } from '../utils/terminalFormatting';
+import AnsiToHtml from 'ansi-to-html';
+
+const ansiConverter = new AnsiToHtml({
+  fg: '#ffffff',
+  bg: '#000000',
+  newline: true,
+  escapeXML: true,
+  colors: {
+    0: '#000000',
+    1: '#ff5555',
+    2: '#50fa7b',
+    3: '#f1fa8c',
+    4: '#bd93f9',
+    5: '#ff79c6',
+    6: '#8be9fd',
+    7: '#bfbfbf',
+    8: '#4d4d4d',
+    9: '#ff6e67',
+    10: '#5af78e',
+    11: '#f4f99d',
+    12: '#caa9fa',
+    13: '#ff92d0',
+    14: '#9aedfe',
+    15: '#e6e6e6'
+  }
+});
 
 const MessageContainer = styled.div<{ role: MessageRole }>`
   display: flex;
@@ -169,13 +195,31 @@ function MessageComponent({ message }: MessageComponentProps) {
   };
 
   return (
-    <MessageContainer role={message.role}>
+    <MessageContainer role={message.role} data-testid="message">
       <MessageHeader>
         <MessageRoleSpan role={message.role}>{message.role}</MessageRoleSpan>
         <MessageTimestamp>{formatTime(message.timestamp)}</MessageTimestamp>
       </MessageHeader>
       <MessageContent>
-        {message.isTerminalOutput && message.terminalCommand ? (
+        {message.isPty ? (
+          // Render PTY output with ANSI codes
+          <div 
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '13px',
+              lineHeight: '1.5',
+              whiteSpace: 'pre-wrap',
+              background: 'var(--terminal-bg)',
+              padding: '12px',
+              borderRadius: '6px',
+              border: '1px solid var(--terminal-border)',
+              overflow: 'auto'
+            }}
+            dangerouslySetInnerHTML={{
+              __html: ansiConverter.toHtml(message.content)
+            }}
+          />
+        ) : message.isTerminalOutput && message.terminalCommand ? (
           <TerminalOutput command={message.terminalCommand} output={message.content} />
         ) : (
           <ReactMarkdown

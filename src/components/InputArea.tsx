@@ -218,10 +218,12 @@ function InputArea({ onSendMessage, disabled }: InputAreaProps) {
           placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
           disabled={disabled}
           rows={1}
+          data-testid="message-input"
         />
         <SendButton
           onClick={handleSubmit}
           disabled={disabled || !message.trim()}
+          data-testid="send-button"
         >
           Send
         </SendButton>
