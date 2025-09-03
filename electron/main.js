@@ -52,10 +52,7 @@ const createWindow = () => {
     }
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-    // Only open DevTools in production if not testing
-    if (!isTest) {
-      mainWindow.webContents.openDevTools();
-    }
+    // DevTools only open in development mode for production builds
   }
 
   mainWindow.once('ready-to-show', () => {
