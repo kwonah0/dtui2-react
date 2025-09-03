@@ -112,17 +112,51 @@ export class ElectronShellAIAgent implements AIAgent {
       }
       
       const { startMarker, endMarker } = this.outputConfig.extraction;
-      const startIndex = text.indexOf(startMarker);
-      const endIndex = text.indexOf(endMarker);
       
-      if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-        const extracted = text.substring(startIndex + startMarker.length, endIndex).trim();
-        console.log('✅ Extracted response between markers:', { startIndex, endIndex, extracted: extracted.slice(0, 100) + '...' });
-        return extracted;
+      // Find start marker (case-insensitive search as fallback)
+      let startIndex = text.indexOf(startMarker);
+      if (startIndex === -1) {
+        // Try case-insensitive search
+        const lowerText = text.toLowerCase();
+        const lowerStartMarker = startMarker.toLowerCase();
+        startIndex = lowerText.indexOf(lowerStartMarker);
+        if (startIndex !== -1) {
+          console.log('🔍 Found start marker with case-insensitive search');
+        }
       }
       
-      console.log('⚠️ Markers not found, using fallback (full output)');
-      return text;
+      if (startIndex === -1) {
+        console.log('⚠️ Start marker not found, using fallback (full output)');
+        return text;
+      }
+      
+      // Find end marker after start marker
+      const searchStart = startIndex + startMarker.length;
+      let endIndex = text.indexOf(endMarker, searchStart);
+      if (endIndex === -1) {
+        // Try case-insensitive search for end marker
+        const lowerText = text.toLowerCase();
+        const lowerEndMarker = endMarker.toLowerCase();
+        endIndex = lowerText.indexOf(lowerEndMarker, searchStart);
+        if (endIndex !== -1) {
+          console.log('🔍 Found end marker with case-insensitive search');
+        }
+      }
+      
+      if (endIndex === -1) {
+        console.log('⚠️ End marker not found, using fallback (full output)');
+        return text;
+      }
+      
+      const extracted = text.substring(startIndex + startMarker.length, endIndex).trim();
+      console.log('✅ Extracted response between markers:', { 
+        startIndex, 
+        endIndex, 
+        extractedLength: extracted.length,
+        preview: extracted.slice(0, 100) + (extracted.length > 100 ? '...' : '')
+      });
+      
+      return extracted;
     };
     
     if (result.success) {
