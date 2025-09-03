@@ -90,16 +90,6 @@ export class ElectronShellAIAgent implements AIAgent {
     // Format output based on config
     let output = '';
     
-    // If PTY is used, apply extraction and return with metadata
-    if (result.metadata?.isPty) {
-      const extractedContent = extractResponse(result.content);
-      // Return special format that App.tsx can detect
-      return `__PTY_OUTPUT__${JSON.stringify({
-        content: extractedContent,
-        isPty: true
-      })}`;
-    }
-    
     const wrapInCodeBlock = (text: string) => {
       if (this.outputConfig.useCodeBlock) {
         return `\`\`\`${this.outputConfig.codeBlockSyntax}\n${text}\n\`\`\``;
@@ -163,6 +153,16 @@ export class ElectronShellAIAgent implements AIAgent {
       
       return extracted;
     };
+    
+    // If PTY is used, apply extraction and return with metadata
+    if (result.metadata?.isPty) {
+      const extractedContent = extractResponse(result.content);
+      // Return special format that App.tsx can detect
+      return `__PTY_OUTPUT__${JSON.stringify({
+        content: extractedContent,
+        isPty: true
+      })}`;
+    }
     
     if (result.success) {
       const stdout = result.metadata?.stdout || result.content || 'Command completed successfully';
