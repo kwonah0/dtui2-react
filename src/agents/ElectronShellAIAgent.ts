@@ -90,11 +90,12 @@ export class ElectronShellAIAgent implements AIAgent {
     // Format output based on config
     let output = '';
     
-    // If PTY is used, return raw output with metadata
+    // If PTY is used, apply extraction and return with metadata
     if (result.metadata?.isPty) {
+      const extractedContent = extractResponse(result.content);
       // Return special format that App.tsx can detect
       return `__PTY_OUTPUT__${JSON.stringify({
-        content: result.content,
+        content: extractedContent,
         isPty: true
       })}`;
     }
@@ -107,7 +108,11 @@ export class ElectronShellAIAgent implements AIAgent {
     };
     
     const extractResponse = (text: string) => {
+      console.log('🔍 extractResponse called with config:', JSON.stringify(this.outputConfig, null, 2));
+      console.log('🔍 Input text preview:', JSON.stringify(text.slice(0, 100) + (text.length > 100 ? '...' : '')));
+      
       if (!this.outputConfig.extraction.enabled) {
+        console.log('❌ Extraction disabled, returning full text');
         return text;
       }
       
