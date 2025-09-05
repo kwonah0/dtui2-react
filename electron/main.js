@@ -745,13 +745,18 @@ ipcMain.handle('get-config', async () => {
         provider: 'shell',
         shell: {
           command: 'echo',
-          args: ['[FALLBACK]:'],
+          args: [],
           template: '{command} "{args} {prompt}"',
           timeout: 10000,
           streaming: false,
           outputFormat: {
-            useCodeBlock: true,
-            codeBlockSyntax: 'shell'
+            useCodeBlock: false,
+            codeBlockSyntax: 'shell',
+            extraction: {
+              enabled: true,
+              startMarker: '<RESPONSE>',
+              endMarker: '</RESPONSE>'
+            }
           }
         }
       },
@@ -808,7 +813,12 @@ ipcMain.handle('test-shell-agent', async () => {
             usePty: true,
             outputFormat: {
               useCodeBlock: false,
-              codeBlockSyntax: 'shell'
+              codeBlockSyntax: 'shell',
+              extraction: {
+                enabled: true,
+                startMarker: '<RESPONSE>',
+                endMarker: '</RESPONSE>'
+              }
             }
           }
         }
@@ -931,7 +941,12 @@ ipcMain.handle('execute-shell-ai-command', async (_, prompt) => {
             usePty: true,
             outputFormat: {
               useCodeBlock: false,
-              codeBlockSyntax: 'shell'
+              codeBlockSyntax: 'shell',
+              extraction: {
+                enabled: true,
+                startMarker: '<RESPONSE>',
+                endMarker: '</RESPONSE>'
+              }
             }
           }
         }

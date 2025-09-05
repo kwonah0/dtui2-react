@@ -20,7 +20,7 @@ export class ElectronShellAIAgent implements AIAgent {
   constructor() {
     // Built-in safe defaults compatible with both regular and HPC environments
     this.outputConfig = {
-      useCodeBlock: true,
+      useCodeBlock: false,
       codeBlockSyntax: 'shell',
       extraction: {
         enabled: true,
